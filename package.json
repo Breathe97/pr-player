@@ -1,0 +1,39 @@
+{
+  "name": "pr-player",
+  "description": "基于web-codecs解码flv视频流并输出帧数据。",
+  "version": "0.0.1",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.umd.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.umd.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsc && vite build"
+  },
+  "dependencies": {
+    "pr-audio-stream": "^0.1.1",
+    "pr-fetch": "^0.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^7.1.7",
+    "vite-plugin-dts": "^4.5.3"
+  },
+  "private": false,
+  "author": "Breathe",
+  "keywords": [
+    "pr-player"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Breathe97/pr-player"
+  }
+}
