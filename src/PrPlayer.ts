@@ -56,6 +56,7 @@ interface On {
   }
   video?: (canvas: HTMLCanvasElement) => void
   cut?: (key: string, canvas: HTMLCanvasElement) => void
+  error?: (_e: any) => void
 }
 
 export class PrPlayer {
@@ -210,6 +211,7 @@ export class PrPlayer {
     }
     this.decoderWorker.on.audio.error = (e) => {
       this.stop()
+      this.on.error && this.on.error(e)
     }
 
     this.decoderWorker.on.video.decode = (frame) => {
@@ -220,6 +222,7 @@ export class PrPlayer {
     }
     this.decoderWorker.on.video.error = (e) => {
       this.stop()
+      this.on.error && this.on.error(e)
     }
   }
 
