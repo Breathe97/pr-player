@@ -1,7 +1,7 @@
 import { Demuxer } from './Demuxer'
 
 interface WorkerMessage {
-  action: 'init' | 'destroy' | 'push'
+  action: 'init' | 'push' | 'destroy'
   data: any
 }
 

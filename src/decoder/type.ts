@@ -1,6 +1,6 @@
 export interface On {
   audio: {
-    decode?: (_AudioData: AudioData) => void
+    decode?: (_audioData: AudioData) => void
     error?: (_e: DOMException) => void
   }
   video: {

@@ -1,5 +1,3 @@
-import { CutOption } from './type'
-
 export class VideoPlayer {
   private isRendering = false
   private pendingFrames: { timestamp: number; bitmap: ImageBitmap }[] = []
@@ -10,15 +8,9 @@ export class VideoPlayer {
 
   private baseTime = 0
 
-  private cutOption: CutOption | undefined
-
   constructor() {}
 
-  setCut = async (cutOption: CutOption) => {
-    this.cutOption = { ...this.cutOption, ...cutOption }
-  }
-
-  init = ({ offscreenCanvas, baseTime = 0 }: { offscreenCanvas: OffscreenCanvas; baseTime?: number }) => {
+  init = ({ offscreenCanvas, baseTime = performance.timeOrigin }: { offscreenCanvas: OffscreenCanvas; baseTime?: number }) => {
     this.destroy()
     this.offscreenCanvas = offscreenCanvas
     this.ctx = this.offscreenCanvas.getContext('2d')
@@ -31,7 +23,6 @@ export class VideoPlayer {
     this.offscreenCanvas = undefined
     this.ctx = undefined
     this.baseTime = 0
-    this.cutOption = undefined
   }
 
   push = (frame: { timestamp: number; bitmap: ImageBitmap }) => {
@@ -42,41 +33,34 @@ export class VideoPlayer {
   }
 
   private calculateTimeUntilNextFrame = (timestamp: number) => {
-    if (this.baseTime == 0) this.baseTime = performance.now()
-    let mediaTime = performance.now() - this.baseTime
-    return Math.max(0, timestamp / 1000 - mediaTime)
+    const currentTime = performance.timeOrigin + performance.now()
+    const renderTime = this.baseTime + timestamp / 1000
+    const waitTime = renderTime - currentTime
+    return Math.max(0, waitTime)
   }
 
   private renderFrame = async () => {
-    const frame = this.pendingFrames.shift()
-
-    this.isRendering = Boolean(frame)
-
-    if (!frame) {
-      this.isRendering = false
-      return
-    }
-
     this.isRendering = true
 
-    let { timestamp, bitmap } = frame
+    while (true) {
+      const frame = this.pendingFrames.shift()
+      if (!frame) break
+      this.isRendering = false
 
-    if (this.cutOption) {
-      const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = this.cutOption
-      const cutBitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
+      this.isRendering = true
+
+      let { timestamp, bitmap } = frame
+
+      const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
+
+      if (this.ctx && this.offscreenCanvas) {
+        await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
+        this.ctx.drawImage(bitmap, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height)
+      }
+
       bitmap.close()
-      bitmap = cutBitmap
     }
 
-    const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
-    await new Promise((r) => setTimeout(r, timeUntilNextFrame))
-
-    if (this.ctx && this.offscreenCanvas) {
-      this.ctx.drawImage(bitmap, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height)
-    }
-
-    bitmap.close()
-
-    setTimeout(this.renderFrame, 0)
+    this.isRendering = false
   }
 }

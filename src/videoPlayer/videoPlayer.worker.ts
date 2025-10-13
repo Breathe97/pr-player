@@ -1,7 +1,7 @@
 import { VideoPlayer } from './VideoPlayer'
 
 interface WorkerMessage {
-  action: 'init' | 'destroy' | 'push' | 'setCut'
+  action: 'init' | 'push' | 'destroy'
   data: any
 }
 

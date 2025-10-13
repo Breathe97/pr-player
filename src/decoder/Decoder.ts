@@ -62,7 +62,6 @@ export class Decoder {
           this.on.video.error && this.on.video.error(e)
         }
       })
-
       this.videoDecoder.configure(this.videoDecoderConfig)
     },
     decode: (init: EncodedVideoChunkInit) => {

@@ -3,9 +3,9 @@ import { Header, On, TagType } from './type'
 
 export class Demuxer {
   private parseSpeed = 8
-  private parseTimer = 0
-  private pushFuncs: Function[] = []
+  private pendingPayloads: Uint8Array[] = []
   private payload = new Uint8Array(0)
+
   private offset = 0
   private is_parsing = false // 是否正在解析
   private header: Header | undefined
@@ -17,23 +17,17 @@ export class Demuxer {
 
   init = () => {
     this.destroy()
-    this.parseTimer = setInterval(this.parse, this.parseSpeed)
   }
 
   push = (payload: Uint8Array) => {
-    const func = () => {
-      // 合并数据
-      const _payload = new Uint8Array(this.payload.byteLength + payload.byteLength)
-      _payload.set(this.payload, 0)
-      _payload.set(payload, this.payload.byteLength)
-      this.payload = _payload
+    this.pendingPayloads.push(payload)
+    if (!this.is_parsing) {
+      this.parse()
     }
-    this.pushFuncs.push(func)
   }
 
   destroy = () => {
-    clearInterval(this.parseTimer)
-    this.pushFuncs = []
+    this.pendingPayloads = []
     this.payload = new Uint8Array(0)
     this.offset = 0
     this.is_parsing = false
@@ -42,19 +36,26 @@ export class Demuxer {
   }
 
   private parse = async () => {
-    if (this.pushFuncs.length === 0 || this.is_parsing === true) return
     this.is_parsing = true
 
-    {
-      const pushFunc = this.pushFuncs.shift()
-      pushFunc && pushFunc()
-    }
-    const view = new DataView(this.payload.buffer)
+    while (true) {
+      const payload = this.pendingPayloads.shift()
+      if (!payload) break
+      // 合并数据
+      const _payload = new Uint8Array(this.payload.byteLength + payload.byteLength)
 
-    if (!this.header) {
-      this.parseHeader(view)
+      _payload.set(this.payload, 0)
+      _payload.set(payload, this.payload.byteLength)
+
+      this.payload = _payload
+      const view = new DataView(this.payload.buffer)
+
+      if (!this.header) {
+        this.parseHeader(view)
+      }
+
+      await this.parseTag(view)
     }
-    await this.parseTag(view)
 
     this.is_parsing = false
   }
