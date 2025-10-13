@@ -37,14 +37,14 @@ player.on.demuxer.script = (e) => {
 }
 
 player.on.video = async (canvas) => {
-  canvas.style.width = '100%'
+  canvas.style.height = '100%'
   const canvas_view = document.querySelector('#canvas-video-frame-view')
   if (!canvas_view) return
   canvas_view.replaceChildren(canvas)
 }
 
 player.on.cut = async (key, canvas) => {
-  canvas.style.width = '100%'
+  canvas.style.height = '100%'
   const video_view = document.querySelector('#canvas-video-cut-view')
   video_view?.replaceChildren(canvas)
 }
