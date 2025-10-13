@@ -206,8 +206,8 @@ export class PrPlayer {
   private initDecoder = () => {
     this.decoderWorker = new DecoderWorker()
     this.decoderWorker.on.audio.decode = (audioData) => {
-      this.audioPlayer?.push(audioData)
       this.on.decoder.audio && this.on.decoder.audio(audioData)
+      this.audioPlayer?.push(audioData)
     }
     this.decoderWorker.on.audio.error = (e) => {
       this.stop()
@@ -215,9 +215,9 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.decode = (frame) => {
-      this.videoPlayerWorker?.push(frame)
-      renderCut(this.cutVideoPlayerWorkers, frame)
       this.on.decoder.video && this.on.decoder.video(frame)
+      renderCut(this.cutVideoPlayerWorkers, frame)
+      this.videoPlayerWorker?.push(frame)
       frame.bitmap.close()
     }
     this.decoderWorker.on.video.error = (e) => {
