@@ -5,15 +5,20 @@
       <input style="padding: 6px; width: 240px" id="input" type="text" v-model="url" placeholder="https://xxxx.flv" />
       <div style="display: flex; gap: 12px">
         <button @click="play">Start</button>
-        <button @click="stop">Stop</button>
+        <button @click="setPause" style="width: 120px">Pause: {{ pause }}</button>
         <button @click="cut">Cut</button>
-        <button @click="setPause">pause: {{ pause }}</button>
+        <button @click="setCutPause" style="width: 160px">Cut Pause: {{ cut_pause }}</button>
+        <button @click="stop">Stop</button>
       </div>
     </div>
     <div class="play-view">
       <div class="canvas-video-frame">
         <div class="title">VideoFrame</div>
         <div id="canvas-video-frame-view" style="background-color: antiquewhite"></div>
+      </div>
+      <div class="canvas-video-frame">
+        <div class="title">MediaStream</div>
+        <div id="canvas-video-stream-view" style="background-color: aquamarine"></div>
       </div>
       <div class="canvas-video-cut">
         <div class="title">Cut</div>
@@ -37,41 +42,69 @@ player.on.demuxer.script = (e) => {
   info.value = e.body
 }
 
-player.on.video = async (canvas) => {
-  canvas.style.height = '100%'
-  const canvas_view = document.querySelector('#canvas-video-frame-view')
-  if (!canvas_view) return
-  canvas_view.replaceChildren(canvas)
-}
-
-player.on.cut = async (key, canvas) => {
-  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: key, canvas`, key, canvas)
-  canvas.style.height = '100%'
-  const video_view = document.querySelector('#canvas-video-cut-view')
-  video_view?.replaceChildren(canvas)
-}
-
-const play = async () => {
-  player.init()
-  player.start(url.value)
-  player.audio.setMute(false)
-}
-
-const cut = () => {
-  const { width, height } = info.value
-  const ins = player.video.createCut('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
-  ins.setPause(false)
-}
-
 const pause = ref(false)
-
 const setPause = () => {
   pause.value = !pause.value
-  player.video.setPause('cut-any-key', pause.value)
+  player.setPause(pause.value)
+}
+
+const cut_pause = ref(false)
+const setCutPause = () => {
+  cut_pause.value = !cut_pause.value
+  player.cut.setPause('cut-any-key', cut_pause.value)
 }
 
 const stop = () => {
   player.stop()
+}
+
+const play = async () => {
+  pause.value = false
+  player.start(url.value)
+  player.setMute(false)
+
+  {
+    const canvas = player.getCanvas()
+    if (canvas) {
+      canvas.style.height = '100%'
+      const canvas_view = document.querySelector('#canvas-video-frame-view')
+      if (canvas_view) {
+        canvas_view.replaceChildren(canvas)
+      }
+    }
+  }
+
+  {
+    const stream = player.getStream()
+    if (stream) {
+      const dom = document.querySelector('#canvas-video-stream-view')
+      const view = document.createElement('video')
+      view.style.width = '100%'
+      view.style.height = '100%'
+      view.srcObject = stream
+      view.play()
+      dom?.replaceChildren(view)
+    }
+  }
+}
+
+const cut = () => {
+  cut_pause.value = false
+  const { width, height } = info.value
+  player.cut.create('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
+
+  {
+    const stream = player.getCutStream('cut-any-key')
+    if (stream) {
+      const dom = document.querySelector('#canvas-video-cut-view')
+      const view = document.createElement('video')
+      view.style.width = '100%'
+      view.style.height = '100%'
+      view.srcObject = stream
+      view.play()
+      dom?.replaceChildren(view)
+    }
+  }
 }
 </script>
 <style scoped>
@@ -102,11 +135,13 @@ const stop = () => {
 }
 
 #canvas-video-frame-view,
+#canvas-video-stream-view,
 #canvas-video-cut-view {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 </style>

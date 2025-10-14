@@ -5,6 +5,35 @@ import { AudioPlayer } from './audioPlayer/audioPlayer'
 
 import { PrFetch } from 'pr-fetch'
 import { ScriptTag, AudioTag, VideoTag } from './demuxer/type'
+import { Shader } from './render/type'
+
+const stopStream = (stream: MediaStream | undefined) => {
+  const tracks = stream?.getTracks() || []
+  for (const track of tracks) {
+    track.stop()
+  }
+}
+
+const createRender = (baseTime: number) => {
+  const worker = new RenderWorker()
+
+  const canvas = document.createElement('canvas')
+  const offscreenCanvas = canvas.transferControlToOffscreen()
+
+  // @ts-ignore
+  const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
+
+  const stream = new MediaStream([trackGenerator])
+
+  const destroy = () => {
+    worker.destroy()
+    stopStream(stream)
+  }
+
+  worker.init({ offscreenCanvas, baseTime, writable: trackGenerator.writable })
+
+  return { worker, canvas, stream, destroy }
+}
 
 interface On {
   demuxer: {
@@ -17,8 +46,6 @@ interface On {
     audio?: (_AudioData: AudioData) => void
     video?: (_frame: { timestamp: number; bitmap: ImageBitmap }) => void
   }
-  video?: (canvas: HTMLCanvasElement) => void
-  cut?: (key: string, canvas: HTMLCanvasElement) => void
   error?: (_e: any) => void
 }
 
@@ -29,15 +56,21 @@ export class PrPlayer {
   private decoderWorker: DecoderWorker | undefined
 
   private audioPlayer: AudioPlayer | undefined
-  private videoPlayerWorker: RenderWorker | undefined
+
+  private renderWorker: RenderWorker | undefined
 
   private renderBaseTime = 0
+
+  private stream: MediaStream | undefined
 
   private canvas: HTMLCanvasElement | undefined
 
   public on: On = { demuxer: {}, decoder: {} }
 
-  private cutRenderWorkers: Map<string, RenderWorker> = new Map()
+  private cutRenders: Map<string, { worker: RenderWorker; stream: MediaStream; canvas: HTMLCanvasElement; destroy: Function }> = new Map()
+
+  // @ts-ignore
+  trackGenerator: MediaStreamTrackGenerator
 
   constructor() {}
 
@@ -45,12 +78,11 @@ export class PrPlayer {
    * 初始化
    */
   init = () => {
-    this.stop()
     this.initDemuxer()
     this.initDecoder()
-    this.renderBaseTime = new Date().getTime()
     this.audioPlayer = new AudioPlayer()
     this.audioPlayer.init()
+    this.initRender()
   }
 
   /**
@@ -59,6 +91,9 @@ export class PrPlayer {
    */
   start = async (url: string) => {
     try {
+      this.stop()
+      this.renderBaseTime = new Date().getTime()
+      this.init()
       const res = await this.prFetch.request(url)
       const reader = res.body?.getReader()
       if (!reader) throw new Error('Reader is error.')
@@ -77,10 +112,6 @@ export class PrPlayer {
     }
   }
 
-  getRender = () => {
-    return this.canvas
-  }
-
   /**
    * 停止
    */
@@ -88,10 +119,11 @@ export class PrPlayer {
     this.prFetch.stop()
     this.demuxerWorker?.destroy()
     this.decoderWorker?.destroy()
-    this.videoPlayerWorker?.destroy()
-    const keys = [...this.cutRenderWorkers.keys()]
+    this.renderWorker?.destroy()
+    stopStream(this.stream)
+    const keys = [...this.cutRenders.keys()]
     for (const key of keys) {
-      this.video.removeCut(key)
+      this.cut.remove(key)
     }
     this.audioPlayer?.destroy()
     this.renderBaseTime = 0
@@ -110,7 +142,7 @@ export class PrPlayer {
       case 'script':
         {
           const { width, height } = body
-          this.initRender({ width, height })
+          this.renderWorker?.setSize({ width, height })
           this.on.demuxer.script && this.on.demuxer.script(e)
         }
         break
@@ -185,10 +217,10 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.decode = async (frame) => {
-      this.videoPlayerWorker?.push(frame)
-      const keys = [...this.cutRenderWorkers.keys()]
+      this.renderWorker?.push(frame)
+      const keys = [...this.cutRenders.keys()]
       for (const key of keys) {
-        this.cutRenderWorkers.get(key)?.push(frame)
+        this.cutRenders.get(key)?.worker.push(frame)
       }
       this.on.decoder.video && this.on.decoder.video(frame)
       frame.bitmap.close()
@@ -202,69 +234,72 @@ export class PrPlayer {
   /**
    * 初始化渲染器
    */
-  private initRender = ({ width = 256, height = 256 } = {}) => {
-    this.canvas = document.createElement('canvas')
-    this.canvas.width = width
-    this.canvas.height = height
+  private initRender = () => {
+    const { worker, canvas, stream } = createRender(this.renderBaseTime)
 
-    const offscreenCanvas = this.canvas.transferControlToOffscreen()
+    this.renderWorker = worker
 
-    this.videoPlayerWorker = new RenderWorker()
-    this.videoPlayerWorker.init({ offscreenCanvas, baseTime: this.renderBaseTime })
-    if (this.on.video) {
-      this.videoPlayerWorker.setPause(false)
-      this.on.video(this.canvas)
-    }
+    this.canvas = canvas
+
+    this.stream = stream
+
+    this.renderWorker.setPause(false)
   }
 
-  audio = {
-    /**
-     * 是否静音 默认为true
-     * @param state?: boolean
-     */
-    setMute: (state?: boolean) => this.audioPlayer?.prAudioStream?.setMute(state)
+  getCanvas = () => this.canvas
+  getStream = () => this.stream
+  getCutCanvas = (key: string) => this.cutRenders.get(key)?.canvas
+  getCutStream = (key: string) => this.cutRenders.get(key)?.stream
+
+  setPause = (pause: boolean) => {
+    this.renderWorker?.setPause(pause)
   }
 
-  video = {
+  /**
+   * 设置渲染模式
+   */
+  setShader = (shader: Shader[]) => {
+    this.renderWorker?.setShader(shader)
+  }
+
+  /**
+   * 是否静音 默认为true
+   * @param state?: boolean
+   */
+  setMute = (state?: boolean) => this.audioPlayer?.prAudioStream?.setMute(state)
+
+  cut = {
     /**
      * 创建剪切
      */
-    createCut: (key: string, cutOption: { sx?: number; sy?: number; sw?: number; sh?: number }) => {
-      if (this.cutRenderWorkers.has(key)) {
-        this.cutRenderWorkers.get(key)?.destroy()
+    create: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
+      let renderIns = this.cutRenders.get(key)
+      if (renderIns) {
+        renderIns.worker.setCut(cutOption)
+        renderIns.worker.setPause(false)
+        return renderIns
       }
 
-      const canvas = document.createElement('canvas')
-
-      const { sw, sh } = cutOption
-      canvas.width = sw || canvas.width
-      canvas.height = sh || canvas.height
-
-      const cutWorker = new RenderWorker()
-
-      const offscreenCanvas = canvas.transferControlToOffscreen()
-
-      cutWorker.init({ offscreenCanvas, baseTime: this.renderBaseTime })
-
-      cutWorker.setCut(cutOption)
-
-      this.cutRenderWorkers.set(key, cutWorker)
-
-      this.on.cut && this.on.cut(key, canvas)
-
-      return cutWorker
+      renderIns = createRender(this.renderBaseTime)
+      renderIns.worker.setCut(cutOption)
+      this.cutRenders.set(key, renderIns)
+      return renderIns
     },
-
     setPause: (key: string, pause: boolean) => {
-      this.cutRenderWorkers.get(key)?.setPause(pause)
+      this.cutRenders.get(key)?.worker.setPause(pause)
     },
-
+    /**
+     * 设置渲染模式
+     */
+    setShader: (key: string, shader: Shader[]) => {
+      this.cutRenders.get(key)?.worker.setShader(shader)
+    },
     /**
      * 移除剪切
      */
-    removeCut: (key: string) => {
-      this.cutRenderWorkers.get(key)?.destroy()
-      this.cutRenderWorkers.delete(key)
+    remove: (key: string) => {
+      this.cutRenders.get(key)?.destroy()
+      this.cutRenders.delete(key)
     }
   }
 }

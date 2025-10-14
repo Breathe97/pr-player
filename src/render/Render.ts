@@ -1,4 +1,4 @@
-import { CutOption } from './type'
+import { CutOption, Shader } from './type'
 
 export class Render {
   private isRendering = false
@@ -6,21 +6,45 @@ export class Render {
 
   private offscreenCanvas: OffscreenCanvas | undefined
 
+  private writable: any
+  private writer: any
+
   private ctx: OffscreenCanvasRenderingContext2D | null | undefined
 
   private cutOption: CutOption | undefined
 
   private baseTime = 0
 
-  private pause = true
+  private pause = false
+
+  private shader: Shader[] = ['stream']
 
   constructor() {}
 
-  init = ({ offscreenCanvas, baseTime = performance.timeOrigin }: { offscreenCanvas: OffscreenCanvas; baseTime?: number }) => {
+  init = ({ offscreenCanvas, baseTime = performance.timeOrigin, writable }: { offscreenCanvas: OffscreenCanvas; baseTime?: number; writable: any }) => {
     this.destroy()
     this.offscreenCanvas = offscreenCanvas
+    this.writable = writable
+    this.writer = this.writable.getWriter()
+
     this.ctx = this.offscreenCanvas.getContext('2d')
     this.baseTime = baseTime
+  }
+
+  /**
+   * 设置渲染模式
+   */
+  setShader = (shader: Shader[]) => {
+    this.shader = shader
+  }
+
+  /**
+   * 设置尺寸
+   */
+  setSize = ({ width, height }: { width: number; height: number }) => {
+    if (!this.offscreenCanvas) return
+    this.offscreenCanvas.width = width
+    this.offscreenCanvas.height = height
   }
 
   destroy = () => {
@@ -79,7 +103,7 @@ export class Render {
 
       const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
       await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
-      this.drawImage(bitmap)
+      this.drawImage({ timestamp, bitmap })
 
       this.cutOption && bitmap.close() // 剪切需要创建新的 ImageBitmap 才需要关闭
     }
@@ -87,8 +111,17 @@ export class Render {
     this.isRendering = false
   }
 
-  private drawImage = (bitmap: ImageBitmap) => {
-    if (!this.ctx || !this.offscreenCanvas || this.pause === true) return
-    this.ctx.drawImage(bitmap, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height)
+  private drawImage = (frame: { timestamp: number; bitmap: ImageBitmap }) => {
+    if (this.pause === true) return
+    if (this.shader.includes('stream')) {
+      const videoFrame = new VideoFrame(frame.bitmap, { timestamp: frame.timestamp })
+      this.writer.write(videoFrame)
+      videoFrame.close()
+    }
+    if (this.shader.includes('canvas')) {
+      if (this.ctx && this.offscreenCanvas) {
+        this.ctx.drawImage(frame.bitmap, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height)
+      }
+    }
   }
 }
