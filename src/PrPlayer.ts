@@ -35,14 +35,6 @@ const renderCut = async (cutVideoPlayerWorkers: CutVideoPlayerWorkersMap, frame:
   }
 }
 
-const destroyRenderCut = (cutVideoPlayerWorkers: CutVideoPlayerWorkersMap) => {
-  const keys = [...cutVideoPlayerWorkers.keys()]
-  for (const key of keys) {
-    cutVideoPlayerWorkers.get(key)?.worker.destroy()
-    cutVideoPlayerWorkers.delete(key)
-  }
-}
-
 interface On {
   demuxer: {
     script?: (_tag: ScriptTag) => void
@@ -122,7 +114,10 @@ export class PrPlayer {
     this.demuxerWorker?.destroy()
     this.decoderWorker?.destroy()
     this.videoPlayerWorker?.destroy()
-    destroyRenderCut(this.cutVideoPlayerWorkers)
+    const keys = [...this.cutVideoPlayerWorkers.keys()]
+    for (const key of keys) {
+      this.video.removeCut(key)
+    }
     this.audioPlayer?.destroy()
     this.renderBaseTime = 0
     this.canvas = undefined
@@ -214,9 +209,9 @@ export class PrPlayer {
       this.on.error && this.on.error(e)
     }
 
-    this.decoderWorker.on.video.decode = (frame) => {
+    this.decoderWorker.on.video.decode = async (frame) => {
       this.on.decoder.video && this.on.decoder.video(frame)
-      renderCut(this.cutVideoPlayerWorkers, frame)
+      await renderCut(this.cutVideoPlayerWorkers, frame)
       this.videoPlayerWorker?.push(frame)
       frame.bitmap.close()
     }
@@ -276,6 +271,13 @@ export class PrPlayer {
       this.cutVideoPlayerWorkers.set(key, { options: cutOption, worker: cutWorker })
 
       this.on.cut && this.on.cut(key, canvas)
+    },
+    /**
+     * 移除剪切
+     */
+    removeCut: (key: string) => {
+      this.cutVideoPlayerWorkers.get(key)?.worker.destroy()
+      this.cutVideoPlayerWorkers.delete(key)
     }
   }
 }
