@@ -1,39 +1,10 @@
 import { DemuxerWorker } from './demuxer/DemuxerWorker'
 import { DecoderWorker } from './decoder/DecoderWorker'
-import { VideoPlayerWorker } from './videoPlayer/VideoPlayerWorker'
+import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
 import { PrFetch } from 'pr-fetch'
 import { ScriptTag, AudioTag, VideoTag } from './demuxer/type'
-
-interface CutOption {
-  sx?: number
-  sy?: number
-  sw?: number
-  sh?: number
-}
-
-interface CutVideoPlayerWorkers {
-  options: CutOption
-  worker: VideoPlayerWorker
-}
-
-type CutVideoPlayerWorkersMap = Map<string, CutVideoPlayerWorkers>
-
-const renderCut = async (cutVideoPlayerWorkers: CutVideoPlayerWorkersMap, frame: { bitmap: ImageBitmap; timestamp: number }) => {
-  const keys = [...cutVideoPlayerWorkers.keys()]
-  const { timestamp, bitmap } = frame
-
-  for (const key of keys) {
-    const cut = cutVideoPlayerWorkers.get(key)
-    if (!cut) continue
-
-    const { options, worker } = cut
-    const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = options
-    const cutBitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
-    worker.push({ timestamp, bitmap: cutBitmap })
-  }
-}
 
 interface On {
   demuxer: {
@@ -58,15 +29,15 @@ export class PrPlayer {
   private decoderWorker: DecoderWorker | undefined
 
   private audioPlayer: AudioPlayer | undefined
-  private videoPlayerWorker: VideoPlayerWorker | undefined
+  private videoPlayerWorker: RenderWorker | undefined
 
   private renderBaseTime = 0
-
-  private cutVideoPlayerWorkers: CutVideoPlayerWorkersMap = new Map()
 
   private canvas: HTMLCanvasElement | undefined
 
   public on: On = { demuxer: {}, decoder: {} }
+
+  private cutRenderWorkers: Map<string, RenderWorker> = new Map()
 
   constructor() {}
 
@@ -106,6 +77,10 @@ export class PrPlayer {
     }
   }
 
+  getRender = () => {
+    return this.canvas
+  }
+
   /**
    * 停止
    */
@@ -114,7 +89,7 @@ export class PrPlayer {
     this.demuxerWorker?.destroy()
     this.decoderWorker?.destroy()
     this.videoPlayerWorker?.destroy()
-    const keys = [...this.cutVideoPlayerWorkers.keys()]
+    const keys = [...this.cutRenderWorkers.keys()]
     for (const key of keys) {
       this.video.removeCut(key)
     }
@@ -201,8 +176,8 @@ export class PrPlayer {
   private initDecoder = () => {
     this.decoderWorker = new DecoderWorker()
     this.decoderWorker.on.audio.decode = (audioData) => {
-      this.on.decoder.audio && this.on.decoder.audio(audioData)
       this.audioPlayer?.push(audioData)
+      this.on.decoder.audio && this.on.decoder.audio(audioData)
     }
     this.decoderWorker.on.audio.error = (e) => {
       this.stop()
@@ -210,9 +185,12 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.decode = async (frame) => {
-      this.on.decoder.video && this.on.decoder.video(frame)
-      await renderCut(this.cutVideoPlayerWorkers, frame)
       this.videoPlayerWorker?.push(frame)
+      const keys = [...this.cutRenderWorkers.keys()]
+      for (const key of keys) {
+        this.cutRenderWorkers.get(key)?.push(frame)
+      }
+      this.on.decoder.video && this.on.decoder.video(frame)
       frame.bitmap.close()
     }
     this.decoderWorker.on.video.error = (e) => {
@@ -225,16 +203,18 @@ export class PrPlayer {
    * 初始化渲染器
    */
   private initRender = ({ width = 256, height = 256 } = {}) => {
-    if (!this.on.video) return
     this.canvas = document.createElement('canvas')
     this.canvas.width = width
     this.canvas.height = height
 
     const offscreenCanvas = this.canvas.transferControlToOffscreen()
 
-    this.videoPlayerWorker = new VideoPlayerWorker()
+    this.videoPlayerWorker = new RenderWorker()
     this.videoPlayerWorker.init({ offscreenCanvas, baseTime: this.renderBaseTime })
-    this.on.video(this.canvas)
+    if (this.on.video) {
+      this.videoPlayerWorker.setPause(false)
+      this.on.video(this.canvas)
+    }
   }
 
   audio = {
@@ -250,8 +230,8 @@ export class PrPlayer {
      * 创建剪切
      */
     createCut: (key: string, cutOption: { sx?: number; sy?: number; sw?: number; sh?: number }) => {
-      if (this.cutVideoPlayerWorkers.has(key)) {
-        this.cutVideoPlayerWorkers.get(key)?.worker.destroy()
+      if (this.cutRenderWorkers.has(key)) {
+        this.cutRenderWorkers.get(key)?.destroy()
       }
 
       const canvas = document.createElement('canvas')
@@ -260,7 +240,7 @@ export class PrPlayer {
       canvas.width = sw || canvas.width
       canvas.height = sh || canvas.height
 
-      const cutWorker = new VideoPlayerWorker()
+      const cutWorker = new RenderWorker()
 
       const offscreenCanvas = canvas.transferControlToOffscreen()
 
@@ -268,16 +248,23 @@ export class PrPlayer {
 
       cutWorker.setCut(cutOption)
 
-      this.cutVideoPlayerWorkers.set(key, { options: cutOption, worker: cutWorker })
+      this.cutRenderWorkers.set(key, cutWorker)
 
       this.on.cut && this.on.cut(key, canvas)
+
+      return cutWorker
     },
+
+    setPause: (key: string, pause: boolean) => {
+      this.cutRenderWorkers.get(key)?.setPause(pause)
+    },
+
     /**
      * 移除剪切
      */
     removeCut: (key: string) => {
-      this.cutVideoPlayerWorkers.get(key)?.worker.destroy()
-      this.cutVideoPlayerWorkers.delete(key)
+      this.cutRenderWorkers.get(key)?.destroy()
+      this.cutRenderWorkers.delete(key)
     }
   }
 }

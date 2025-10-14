@@ -7,6 +7,7 @@
         <button @click="play">Start</button>
         <button @click="stop">Stop</button>
         <button @click="cut">Cut</button>
+        <button @click="setPause">pause: {{ pause }}</button>
       </div>
     </div>
     <div class="play-view">
@@ -44,6 +45,7 @@ player.on.video = async (canvas) => {
 }
 
 player.on.cut = async (key, canvas) => {
+  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: key, canvas`, key, canvas)
   canvas.style.height = '100%'
   const video_view = document.querySelector('#canvas-video-cut-view')
   video_view?.replaceChildren(canvas)
@@ -57,8 +59,15 @@ const play = async () => {
 
 const cut = () => {
   const { width, height } = info.value
-  player.video.createCut('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
-  // player.video.createCut('cut-any-key', { sx: 0, sy: 0, sw: width, sh: height })
+  const ins = player.video.createCut('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
+  ins.setPause(false)
+}
+
+const pause = ref(false)
+
+const setPause = () => {
+  pause.value = !pause.value
+  player.video.setPause('cut-any-key', pause.value)
 }
 
 const stop = () => {

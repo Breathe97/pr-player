@@ -1,4 +1,6 @@
-export class VideoPlayer {
+import { CutOption } from './type'
+
+export class Render {
   private isRendering = false
   private pendingFrames: { timestamp: number; bitmap: ImageBitmap }[] = []
 
@@ -6,7 +8,11 @@ export class VideoPlayer {
 
   private ctx: OffscreenCanvasRenderingContext2D | null | undefined
 
+  private cutOption: CutOption | undefined
+
   private baseTime = 0
+
+  private pause = true
 
   constructor() {}
 
@@ -32,6 +38,23 @@ export class VideoPlayer {
     }
   }
 
+  /**
+   * 设置剪切
+   */
+  setCut = (cutOption: CutOption) => {
+    this.cutOption = cutOption
+  }
+
+  /**
+   * 设置暂停
+   */
+  setPause = (pause: boolean) => {
+    this.pause = pause
+    if (this.isRendering === false) {
+      setTimeout(this.renderFrame, 0)
+    }
+  }
+
   private calculateTimeUntilNextFrame = (timestamp: number) => {
     const currentTime = performance.timeOrigin + performance.now()
     const renderTime = this.baseTime + timestamp / 1000
@@ -45,22 +68,27 @@ export class VideoPlayer {
     while (true) {
       const frame = this.pendingFrames.shift()
       if (!frame) break
-      this.isRendering = false
-
-      this.isRendering = true
 
       let { timestamp, bitmap } = frame
 
-      const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
-
-      if (this.ctx && this.offscreenCanvas) {
-        await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
-        this.ctx.drawImage(bitmap, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height)
+      // 剪切渲染
+      if (this.cutOption) {
+        const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = this.cutOption
+        bitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
       }
 
-      bitmap.close()
+      const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
+      await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
+      this.drawImage(bitmap)
+
+      this.cutOption && bitmap.close() // 剪切需要创建新的 ImageBitmap 才需要关闭
     }
 
     this.isRendering = false
+  }
+
+  private drawImage = (bitmap: ImageBitmap) => {
+    if (!this.ctx || !this.offscreenCanvas || this.pause === true) return
+    this.ctx.drawImage(bitmap, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height)
   }
 }

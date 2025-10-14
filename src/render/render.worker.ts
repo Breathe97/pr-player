@@ -1,11 +1,11 @@
-import { VideoPlayer } from './VideoPlayer'
+import { Render } from './Render'
 
 interface WorkerMessage {
-  action: 'init' | 'push' | 'destroy'
+  action: 'init' | 'push' | 'setCut' | 'setPause' | 'destroy'
   data: any
 }
 
-const videoPlayer = new VideoPlayer()
+const videoPlayer = new Render()
 
 onmessage = (event: MessageEvent<WorkerMessage>) => {
   const { action, data } = event.data
