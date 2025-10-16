@@ -99,7 +99,7 @@ export class PrPlayer {
         const reader = res.body?.getReader()
         if (!reader) throw new Error('Reader is error.')
 
-        const readFunc = () =>
+        const readFunc = () => {
           reader
             .read()
             .then(({ done, value }) => {
@@ -112,6 +112,7 @@ export class PrPlayer {
             .catch((err) => {
               if (err.name !== 'AbortError') throw err
             })
+        }
         readFunc()
       })
       .catch((err) => {
