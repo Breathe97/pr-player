@@ -93,31 +93,41 @@ export class PrPlayer {
     this.stop()
     this.renderBaseTime = new Date().getTime()
     this.init()
-    return this.prFetch.request(url).then(async (res) => {
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('Reader is error.')
+    return this.prFetch
+      .request(url)
+      .then(async (res) => {
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('Reader is error.')
 
-      const readFunc = async () => {
-        const { done, value } = await reader.read()
-        if (value) {
-          this.demuxerWorker?.push(value)
-        }
-        if (done) {
-          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: done`)
-          return
-        }
+        const readFunc = () =>
+          reader
+            .read()
+            .then(({ done, value }) => {
+              if (value) {
+                this.demuxerWorker?.push(value)
+              }
+              if (done) return
+              readFunc()
+            })
+            .catch((err) => {
+              if (err.name !== 'AbortError') throw err
+            })
         readFunc()
-      }
-
-      readFunc()
-    })
+      })
+      .catch((err) => {
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: err`, err)
+      })
   }
 
   /**
    * 停止
    */
-  stop = () => {
-    this.prFetch.stop()
+  stop = async () => {
+    try {
+      this.prFetch.stop()
+    } catch (error) {
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
+    }
     this.demuxerWorker?.destroy()
     this.decoderWorker?.destroy()
     this.renderWorker?.destroy()

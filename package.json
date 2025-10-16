@@ -1,7 +1,7 @@
 {
   "name": "pr-player",
   "description": "基于web-codecs解码flv视频流并输出帧数据。",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "type": "module",
   "files": [
     "dist"
