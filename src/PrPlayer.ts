@@ -90,26 +90,27 @@ export class PrPlayer {
    * @param url : string
    */
   start = async (url: string) => {
-    try {
-      this.stop()
-      this.renderBaseTime = new Date().getTime()
-      this.init()
-      const res = await this.prFetch.request(url)
+    this.stop()
+    this.renderBaseTime = new Date().getTime()
+    this.init()
+    return this.prFetch.request(url).then(async (res) => {
       const reader = res.body?.getReader()
       if (!reader) throw new Error('Reader is error.')
-      while (true) {
+
+      const readFunc = async () => {
         const { done, value } = await reader.read()
         if (value) {
           this.demuxerWorker?.push(value)
         }
-
         if (done) {
-          break
+          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: done`)
+          return
         }
+        readFunc()
       }
-    } catch (error) {
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
-    }
+
+      readFunc()
+    })
   }
 
   /**

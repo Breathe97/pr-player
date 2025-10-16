@@ -60,7 +60,7 @@ const stop = () => {
 
 const play = async () => {
   pause.value = false
-  player.start(url.value)
+  await player.start(url.value)
   player.setMute(false)
 
   {
