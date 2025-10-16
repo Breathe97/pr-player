@@ -260,8 +260,6 @@ export class PrPlayer {
 
   getCanvas = () => this.canvas
   getStream = () => this.stream
-  getCutCanvas = (key: string) => this.cutRenders.get(key)?.canvas
-  getCutStream = (key: string) => this.cutRenders.get(key)?.stream
 
   setPause = (pause: boolean) => {
     this.renderWorker?.setPause(pause)
@@ -297,6 +295,10 @@ export class PrPlayer {
       this.cutRenders.set(key, renderIns)
       return renderIns
     },
+
+    getCanvas: (key: string) => this.cutRenders.get(key)?.canvas,
+    getStream: (key: string) => this.cutRenders.get(key)?.stream,
+
     setPause: (key: string, pause: boolean) => {
       this.cutRenders.get(key)?.worker.setPause(pause)
     },

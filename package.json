@@ -1,7 +1,7 @@
 {
   "name": "pr-player",
-  "description": "基于web-codecs解码flv视频流并输出帧数据。",
-  "version": "0.0.8",
+  "description": "对 flv 格式的地址进行解析 并输出 canvas、stream，提供 SEI 回调，以及 cut 等相关能力，以支持根据业务层 SEI 对视频进行剪切渲染。",
+  "version": "0.0.9",
   "type": "module",
   "files": [
     "dist"
@@ -19,7 +19,7 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
-    "pr-audio-stream": "^0.1.1",
+    "pr-audio-stream": "^0.1.3",
     "pr-fetch": "^0.0.1"
   },
   "devDependencies": {

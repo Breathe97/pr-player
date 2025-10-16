@@ -94,7 +94,7 @@ const cut = () => {
   player.cut.create('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
 
   {
-    const stream = player.getCutStream('cut-any-key')
+    const stream = player.cut.getStream('cut-any-key')
     if (stream) {
       const dom = document.querySelector('#canvas-video-cut-view')
       const view = document.createElement('video')
