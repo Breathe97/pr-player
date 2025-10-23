@@ -94,7 +94,7 @@ export class Demuxer {
 
         this.offset = this.offset + 4 + 11 + dataSize // previousTagSize(4) tagHeader(11) tagBody(dataSize)
 
-        // await new Promise((resolve) => setTimeout(() => resolve(true), this.parseSpeed))
+        await new Promise((resolve) => setTimeout(() => resolve(true), this.parseSpeed))
       }
     }
   }
