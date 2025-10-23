@@ -18,7 +18,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "type": ["element-plus/global"]
   },
   "include": ["src"],
   "emitDeclarationOnly": true,

@@ -2,7 +2,13 @@
   <div>
     <div style="font-size: 30px; line-height: 80px; padding-top: 40px">WebCodecsPlayer</div>
     <div style="margin: 8px 0; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap">
-      <input style="padding: 6px; width: 240px" id="input" type="text" v-model="url" placeholder="https://xxxx.flv" />
+      <el-input style="width: 320px" v-model="url" placeholder="Please input" class="input-with-select">
+        <template #prepend>
+          <el-select v-model="url_type" placeholder="Select" style="width: 72px" @change="selectUrl">
+            <el-option v-for="item in url_options" :label="item.label" :value="item.value" />
+          </el-select>
+        </template>
+      </el-input>
       <div style="display: flex; gap: 12px">
         <button @click="play">Start</button>
         <button @click="setPause" style="width: 120px">Pause: {{ pause }}</button>
@@ -33,7 +39,25 @@ import { ref, nextTick } from 'vue'
 // import { PrPlayer } from '../../dist/index'
 import { PrPlayer } from '../../src/index'
 
-const url = ref('https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv')
+const url_options = [
+  { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
+  { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' }
+]
+
+const url_type = ref<'flv' | 'hls'>('hls')
+
+const url = ref('')
+
+const selectUrl = (_url: string) => {
+  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: _url`, _url)
+  url.value = _url
+}
+
+const init = () => {
+  url.value = url_options.find((item) => item.label === url_type.value)?.value || ''
+}
+init()
+
 const info = ref()
 
 const player = new PrPlayer()

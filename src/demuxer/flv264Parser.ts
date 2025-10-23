@@ -3,170 +3,10 @@
 // 参考 https://blog.csdn.net/shaosunrise/article/details/121548065
 // 参考 https://www.cnblogs.com/saysmy/p/10716886.html
 
+import { parseAVCC } from './264Parser'
 import { Nalu } from './type'
 
 const textDecoder = new TextDecoder('utf-8') // 指定编码格式
-
-export const isNalStart = (view: DataView, offset: number) => {
-  {
-    const is = view.getUint8(offset) === 0 && view.getUint8(offset + 1) === 0 && view.getUint8(offset + 2) === 0 && view.getUint8(offset + 3) === 0x01
-    if (is) return 4
-  }
-  {
-    const is = view.getUint8(offset) === 0 && view.getUint8(offset + 1) === 0 && view.getUint8(offset + 2) === 0x01
-    if (is) return 3
-  }
-  return 0
-}
-
-export const getNaluHeader = (view: DataView, offset: number) => {
-  const num = view.getUint8(offset)
-  const forbidden_zero_bit = (num >> 7) & 0x01 // 必为0
-  const nal_ref_idc = (num >> 5) & 0x03 // 参考优先级（0-3）
-  const nal_unit_type = num & 0x1f // NALU类型（1-31）
-  return { forbidden_zero_bit, nal_ref_idc, nal_unit_type }
-}
-
-export const getAmfType = (view: DataView, offset: number) => {
-  const amfType = view.getUint8(offset)
-  return amfType
-}
-
-export const getAMFName = (view: DataView, offset: number, size: number) => {
-  const u8Array = new Uint8Array(view.buffer.slice(offset, offset + size))
-  const key = textDecoder?.decode(u8Array) || ''
-  return key
-}
-
-export const getAMFValueSize = (view: DataView, offset: number, amfType: number) => {
-  let size = 0
-  switch (amfType) {
-    case 0x00: // Number
-      {
-        size = 8
-      }
-      break
-    case 0x01: // Boolean
-      {
-        size = 1
-      }
-      break
-    case 0x02: // String
-      {
-        size = view.getUint16(offset, false)
-      }
-      break
-    case 0x03: // Object
-      {
-      }
-      break
-    case 0x08: // Array
-      {
-        size = view.getUint16(size, false)
-      }
-      break
-  }
-  return size
-}
-
-export const getAMFValue = (view: DataView, offset: number, amfType: number) => {
-  let currentOffset = offset
-  let value: any
-  let length = 0
-  switch (amfType) {
-    case 0x00: // Number
-      {
-        value = view.getFloat64(currentOffset, false)
-        length = 8
-      }
-      break
-    case 0x01: // Boolean
-      {
-        value = !!view.getUint8(currentOffset)
-        length = 1
-      }
-      break
-    case 0x02: // String
-      {
-        value = ''
-        const size = view.getUint16(currentOffset, false)
-        currentOffset = currentOffset + 2
-
-        const u8Array = new Int8Array(view.buffer, currentOffset, size).filter((item) => item !== 0x00)
-        const str = textDecoder?.decode(u8Array) || ''
-        value = str.trim()
-        length = 2 + size
-      }
-      break
-    case 0x03: // Object
-      {
-        value = {}
-
-        while (currentOffset < view.byteLength) {
-          const name_size = view.getUint16(currentOffset, false)
-          if (name_size === 0) break
-          currentOffset = currentOffset + 2
-
-          const key = getAMFName(view, currentOffset, name_size)
-          currentOffset = currentOffset + name_size
-
-          const amfType = getAmfType(view, currentOffset)
-          if (amfType === 0x06) break
-          currentOffset = currentOffset + 1
-
-          const res = getAMFValue(view, currentOffset, amfType)
-          currentOffset = currentOffset + res.length
-
-          value[key] = res.value
-
-          length = 2 + name_size + 1 + res.length
-        }
-      }
-      break
-    case 0x08: // Array Object
-      {
-        value = {}
-        const key_num = view.getUint32(currentOffset, false) // 属性个数
-        currentOffset = currentOffset + 4
-
-        for (let index = 0; index < key_num; index++) {
-          const name_size = view.getUint16(currentOffset, false)
-          currentOffset = currentOffset + 2
-
-          const key = getAMFName(view, currentOffset, name_size)
-          currentOffset = currentOffset + name_size
-
-          const amfType = getAmfType(view, currentOffset)
-          currentOffset = currentOffset + 1
-
-          const res = getAMFValue(view, currentOffset, amfType)
-          currentOffset = currentOffset + res.length
-
-          value[key] = res.value
-          length = 2 + name_size + 1 + res.length
-        }
-      }
-      break
-    case 0x0a: // Array Any
-      {
-        value = []
-        const key_num = view.getUint32(currentOffset, false) // 属性个数
-        currentOffset = currentOffset + 4
-        for (let index = 0; index < key_num; index++) {
-          const amfType = getAmfType(view, currentOffset)
-          currentOffset = currentOffset + 1
-
-          const res = getAMFValue(view, currentOffset, amfType)
-          currentOffset = currentOffset + res.length
-          value.push(res.value)
-          length = 1 + res.length
-        }
-      }
-      break
-  }
-  const res = { amfType, length, value }
-  return res
-}
 
 const getUint24 = (view: DataView, offset: number) => {
   const num = (view.getUint8(offset) << 16) | (view.getUint8(offset + 1) << 8) | view.getUint8(offset + 2)
@@ -275,6 +115,124 @@ export const getStreamID = (view: DataView, offset: number) => {
   return num
 }
 
+export const getNaluHeader = (view: DataView, offset: number) => {
+  const num = view.getUint8(offset)
+  const forbidden_zero_bit = (num >> 7) & 0x01 // 必为0
+  const nal_ref_idc = (num >> 5) & 0x03 // 参考优先级（0-3）
+  const nal_unit_type = num & 0x1f // NALU类型（1-31）
+  return { forbidden_zero_bit, nal_ref_idc, nal_unit_type }
+}
+
+export const getAmfType = (view: DataView, offset: number) => {
+  const amfType = view.getUint8(offset)
+  return amfType
+}
+
+export const getAMFName = (view: DataView, offset: number, size: number) => {
+  const u8Array = new Uint8Array(view.buffer.slice(offset, offset + size))
+  const key = textDecoder?.decode(u8Array) || ''
+  return key
+}
+
+export const getAMFValue = (view: DataView, offset: number, amfType: number) => {
+  let currentOffset = offset
+  let value: any
+  let length = 0
+  switch (amfType) {
+    case 0x00: // Number
+      {
+        value = view.getFloat64(currentOffset, false)
+        length = 8
+      }
+      break
+    case 0x01: // Boolean
+      {
+        value = !!view.getUint8(currentOffset)
+        length = 1
+      }
+      break
+    case 0x02: // String
+      {
+        value = ''
+        const size = view.getUint16(currentOffset, false)
+        currentOffset = currentOffset + 2
+
+        const u8Array = new Int8Array(view.buffer, currentOffset, size).filter((item) => item !== 0x00)
+        const str = textDecoder?.decode(u8Array) || ''
+        value = str.trim()
+        length = 2 + size
+      }
+      break
+    case 0x03: // Object
+      {
+        value = {}
+
+        while (currentOffset < view.byteLength) {
+          const name_size = view.getUint16(currentOffset, false)
+          if (name_size === 0) break
+          currentOffset = currentOffset + 2
+
+          const key = getAMFName(view, currentOffset, name_size)
+          currentOffset = currentOffset + name_size
+
+          const amfType = getAmfType(view, currentOffset)
+          if (amfType === 0x06) break
+          currentOffset = currentOffset + 1
+
+          const res = getAMFValue(view, currentOffset, amfType)
+          currentOffset = currentOffset + res.length
+
+          value[key] = res.value
+
+          length = 2 + name_size + 1 + res.length
+        }
+      }
+      break
+    case 0x08: // Array Object
+      {
+        value = {}
+        const key_num = view.getUint32(currentOffset, false) // 属性个数
+        currentOffset = currentOffset + 4
+
+        for (let index = 0; index < key_num; index++) {
+          const name_size = view.getUint16(currentOffset, false)
+          currentOffset = currentOffset + 2
+
+          const key = getAMFName(view, currentOffset, name_size)
+          currentOffset = currentOffset + name_size
+
+          const amfType = getAmfType(view, currentOffset)
+          currentOffset = currentOffset + 1
+
+          const res = getAMFValue(view, currentOffset, amfType)
+          currentOffset = currentOffset + res.length
+
+          value[key] = res.value
+          length = 2 + name_size + 1 + res.length
+        }
+      }
+      break
+    case 0x0a: // Array Any
+      {
+        value = []
+        const key_num = view.getUint32(currentOffset, false) // 属性个数
+        currentOffset = currentOffset + 4
+        for (let index = 0; index < key_num; index++) {
+          const amfType = getAmfType(view, currentOffset)
+          currentOffset = currentOffset + 1
+
+          const res = getAMFValue(view, currentOffset, amfType)
+          currentOffset = currentOffset + res.length
+          value.push(res.value)
+          length = 1 + res.length
+        }
+      }
+      break
+  }
+  const res = { amfType, length, value }
+  return res
+}
+
 export const parseMetaData = (view: DataView, offset: number) => {
   let currentOffset = offset
   // [0]字节
@@ -323,8 +281,8 @@ export const parseAudio = (view: DataView, offset: number, dataSize: number) => 
   currentOffset = currentOffset + 1
 
   // [2,dataSize]字节
-  const dataLength = dataSize - 2
-  const data = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + dataLength))
+  const payloadSize = dataSize - 2
+  const data = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadSize))
 
   // aac
   if (soundFormat === 10) {
@@ -365,10 +323,11 @@ export const parseVideo = (view: DataView, offset: number, dataSize: number) => 
   // [2,3,4]字节
   const cts = getUint24(view, currentOffset)
   currentOffset = currentOffset + 3
+  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: cts`, cts)
 
   // [5,dataSize]字节
-  const dataLength = dataSize - 5
-  const data = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + dataLength))
+  const payloadSize = dataSize - 5
+  const data = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadSize))
 
   switch (codecID) {
     case 7: // H.264 AVCC
@@ -376,55 +335,9 @@ export const parseVideo = (view: DataView, offset: number, dataSize: number) => 
         // config sps pps
         if (avcPacketType === 0) {
           // [0]字节 固定为1（H.264标准要求）
-          const version = view.getUint8(currentOffset)
-          currentOffset = currentOffset + 1
-          if (version !== 1) throw new Error('Invalid AVC version')
+          const config = parseAVCC(data)
 
-          // [1]字节 编码档次（Profile），如0x64=High Profile、0x66=Baseline Profile
-          const profile = view.getUint8(currentOffset) & 0xff
-          currentOffset = currentOffset + 1
-
-          // [2]字节 兼容性标志（与Profile配合使用）
-          const compatibility = view.getUint8(currentOffset) & 0xff
-          currentOffset = currentOffset + 1
-
-          // [3]字节 编码级别（Level），如0x31=3.1 Level
-          const level = view.getUint8(currentOffset) & 0xff
-          currentOffset = currentOffset + 1
-
-          const arr = Array.from([profile, compatibility, level], (item) => item.toString(16).padStart(2, '0'))
-          const str = arr.join('')
-          const codec = `avc1.${str}`
-
-          // [4]字节 低2位 NALU长度前缀的字节数减1（如0x03=4字节长度前缀）
-          const lengthSizeMinusOne = (view.getUint8(currentOffset) & 0x03) - 1
-          currentOffset = currentOffset + 1
-
-          // [5]字节 低5位 SPS数量（通常为1）
-          const numOfSequenceParameterSets = view.getUint8(currentOffset) & 0x1f
-          currentOffset = currentOffset + 1
-
-          // [6，7]字节 SPS的总长度（大端序）
-          const sequenceParameterSetLength = view.getUint16(currentOffset, false)
-          currentOffset = currentOffset + 2
-
-          // [8,...sequenceParameterSetLength]字节 SPS数据（长度为sequenceParameterSetLength）
-          const sps = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + sequenceParameterSetLength))
-          currentOffset = currentOffset + sequenceParameterSetLength
-
-          // [0]字节 低5位 PPS数量（通常为1）
-          const numOfPictureParameterSets = view.getUint8(currentOffset) & 0x1f
-          currentOffset = currentOffset + 1
-
-          // [1,2]字节 PPS的总长度（大端序）
-          const pictureParameterSetLength = view.getUint16(currentOffset, false)
-          currentOffset = currentOffset + 2
-
-          // [3,...pictureParameterSetLength]字节	PPS数据（长度为pictureParameterSetLength）
-          const pps = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + pictureParameterSetLength))
-          currentOffset = currentOffset + pictureParameterSetLength
-
-          return { frameType, codecID, avcPacketType, cts, data, version, codec, profile, compatibility, level, lengthSizeMinusOne, numOfSequenceParameterSets, sequenceParameterSetLength, sps, numOfPictureParameterSets, pictureParameterSetLength, pps }
+          return { frameType, codecID, avcPacketType, cts, data, ...config }
         }
         // video data
         else if (avcPacketType === 1) {

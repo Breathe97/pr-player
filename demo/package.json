@@ -9,8 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "pr-tools": "^1.6.4",
+    "element-plus": "^2.11.4",
     "pr-player": "^0.0.3",
+    "pr-tools": "^1.6.4",
     "vue": "^3.5.13"
   },
   "devDependencies": {

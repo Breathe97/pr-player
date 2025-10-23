@@ -1,3 +1,6 @@
+import type { On as TsOn } from './ts264Parser'
+
+export type Pattern = 'hls' | 'dash' | 'rtmp' | 'flv'
 export type TagType = 'script' | 'audio' | 'video'
 
 export interface Header {
@@ -74,7 +77,9 @@ export interface VideoTag {
   }
 }
 
+// PS、RTP、TS、ES
 export interface On {
   header?: (_header: Header) => void
   tag?: (_tag: ScriptTag | AudioTag | VideoTag) => void
+  ts?: TsOn
 }

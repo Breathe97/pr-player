@@ -19,6 +19,7 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
+    "demuxer": "^2.3.0",
     "pr-audio-stream": "^0.1.3",
     "pr-fetch": "^0.0.1"
   },
