@@ -75,7 +75,7 @@ export interface PESPacket {
 export interface On {
   debug?: (_debug: any) => void
   info?: (_info: any) => void
-  config?: (_config: any) => void
+  config?: (_config: AudioConfig | VideoConfig) => void
   chunk?: (_chunk: Chunk) => void
 
   pat?: (_pat: Pat) => void
@@ -174,7 +174,7 @@ export class ParseTS {
             switch (streamInfo.kind) {
               case 'video':
                 {
-                  const chunk = await this.parseVideo(payload)
+                  const chunk = (await this.parseVideo(payload)) as any
                   this.on.chunk && this.on.chunk(chunk)
                   await new Promise((resolve) => setTimeout(() => resolve(true), 8))
                 }
