@@ -3,35 +3,25 @@
 // 参考 https://blog.csdn.net/shaosunrise/article/details/121548065
 // 参考 https://www.cnblogs.com/saysmy/p/10716886.html
 
+import { Chunk } from '../cacher/Cacher'
 import { parseAVCC } from './264Parser'
+import { AudioConfig, VideoConfig } from './Demuxer'
 
 const getUint24 = (view: DataView, offset: number) => {
   const num = (view.getUint8(offset) << 16) | (view.getUint8(offset + 1) << 8) | view.getUint8(offset + 2)
   return num
 }
 
-export interface Config {
-  audio?: {}
-
-  video?: {
-    codec?: string
-    sps?: Uint8Array
-    pps?: Uint8Array
-    description?: Uint8Array
-  }
-}
-
 export interface On {
   debug?: (_debug: any) => void
-  config?: (_config: any) => void
-  chunk?: (_e: any) => void
+  info?: (_info: any) => void
+  config?: (_config: AudioConfig | VideoConfig) => void
+  chunk?: (_chunk: Chunk) => void
 }
 
 export class ParseFLV {
-  config: Config = {
-    audio: undefined,
-    video: undefined
-  }
+  audioConfig?: AudioConfig
+  videoConfig?: VideoConfig
 
   header?: any
 
@@ -62,10 +52,27 @@ export class ParseFLV {
       switch (tagType) {
         case 'script':
           {
+            this.on.info && this.on.info(tagBody)
           }
           break
         case 'audio':
           {
+            const { accPacketType } = tagBody
+
+            // 音频配置
+            if (accPacketType === 0) {
+              const { codec, sampleRate, channelConfiguration } = tagBody
+              this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels: channelConfiguration }
+              this.on.config && this.on.config(this.audioConfig)
+            }
+            // 音频帧数据
+            else {
+              const { cts, data } = tagBody
+              const type = 'key'
+              const pts = cts === undefined ? undefined : cts + dts
+
+              this.on.chunk && this.on.chunk({ kind: 'audio', type, dts, pts, cts, data })
+            }
           }
           break
 
@@ -76,17 +83,16 @@ export class ParseFLV {
             // 视频配置
             if (avcPacketType === 0) {
               const { codec, sps, pps, data: description } = tagBody
-              this.config.video = { codec, description, sps, pps }
-              this.on.config && this.on.config({ kind: 'video', ...this.config.video })
+              this.videoConfig = { kind: 'video', codec, description, sps, pps }
+              this.on.config && this.on.config(this.videoConfig)
             }
             // 视频帧数据
             else {
-              const { frameType, cts, data } = tagBody
+              const { frameType, cts, data, nalus } = tagBody
               const type = frameType === 1 ? 'key' : 'delta'
-              const pts = cts + dts
+              const pts = cts === undefined ? undefined : cts + dts
 
-              const chunk = { kind: 'video', type, dts, pts, cts, data }
-              this.on.chunk && this.on.chunk(chunk)
+              this.on.chunk && this.on.chunk({ kind: 'video', type, dts, pts, cts, data, nalus })
               await new Promise((resolve) => setTimeout(() => resolve(true), 8))
             }
           }
@@ -318,30 +324,21 @@ export class ParseFLV {
           }
           // video data
           else if (avcPacketType === 1) {
-            // const nalus = []
+            const nalus = []
 
             const maxSize = currentOffset + dataSize - 5
 
-            // while (currentOffset + 4 < maxSize) {
+            while (currentOffset + 4 < maxSize) {
+              // NALU长度
+              const size = view.getUint32(currentOffset, false)
 
-            //   const nalu = parseNalu()
-            //   // NALU长度
-            //   const size = view.getUint32(currentOffset, false)
-            //   currentOffset = currentOffset + 4
+              const nalu = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + size))
+              currentOffset += 4 + size
 
-            //   // NALU Header
-            //   const header = getNaluHeader(view, currentOffset)
-            //   currentOffset = currentOffset + 1
+              nalus.push(nalu)
+            }
 
-            //   const payloadLength = size - 1
-
-            //   const payload = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadLength))
-            //   currentOffset = currentOffset + payloadLength
-
-            //   nalus.push({ size, header, payload })
-            // }
-
-            return { frameType, codecID, avcPacketType, cts, data }
+            return { frameType, codecID, avcPacketType, cts, data, nalus }
           }
         }
         break

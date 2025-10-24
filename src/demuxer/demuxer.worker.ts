@@ -8,6 +8,7 @@ interface WorkerMessage {
 const demuxer = new Demuxer()
 
 demuxer.on.debug = (data) => postMessage({ action: 'onDebug', data })
+demuxer.on.info = (data) => postMessage({ action: 'onInfo', data })
 demuxer.on.config = (data) => postMessage({ action: 'onConfig', data })
 demuxer.on.chunk = (data) => postMessage({ action: 'onChunk', data })
 

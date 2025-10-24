@@ -1,6 +1,8 @@
 // 参考 https://zhuanlan.zhihu.com/p/496813890
 
-import { createAVCC, nalusToAVCC, naluToAVCC, parseAVCC } from './264Parser'
+import { Chunk } from '../cacher/Cacher'
+import { createAVCC, nalusToAVCC, parseAVCC } from './264Parser'
+import { AudioConfig, VideoConfig } from './Demuxer'
 
 const getMediaKind = (stream_type: number) => {
   // ​​视频流​​：0x01（MPEG-1）、0x02（MPEG-2）、0x1B（H.264）、0x24（HEVC）。
@@ -63,17 +65,6 @@ export interface Pmt {
   crc32: number
 }
 
-export interface Config {
-  audio?: {}
-
-  video?: {
-    codec?: string
-    sps?: Uint8Array
-    pps?: Uint8Array
-    description?: Uint8Array
-  }
-}
-
 export interface PESPacket {
   stream_id: number
   pts?: number // Presentation Timestamp (90kHz)
@@ -83,8 +74,9 @@ export interface PESPacket {
 
 export interface On {
   debug?: (_debug: any) => void
+  info?: (_info: any) => void
   config?: (_config: any) => void
-  chunk?: (_chunk: any) => void
+  chunk?: (_chunk: Chunk) => void
 
   pat?: (_pat: Pat) => void
   pmt?: (_pmt: Pmt) => void
@@ -95,10 +87,8 @@ export interface On {
 export class ParseTS {
   pat?: Pat
   pmt?: Pmt
-  config: Config = {
-    audio: undefined,
-    video: undefined
-  }
+  audioConfig?: AudioConfig
+  videoConfig?: VideoConfig
 
   payloadMap: Map<number, Uint8Array> = new Map()
 
@@ -496,10 +486,10 @@ export class ParseTS {
     // 解析 PES Payload（H.264 NALU）
     pes_payload = payload.slice(currentOffset)
     {
-      const nalus = this.extractNalus(pes_payload)
+      const nalus = this.getNalus(pes_payload)
 
       // 获取 sps pps
-      if (!this.config.video) {
+      if (!this.videoConfig) {
         let sps, pps
         // sps
         {
@@ -514,8 +504,8 @@ export class ParseTS {
         if (sps && pps) {
           const description = createAVCC(sps, pps)
           const { codec } = parseAVCC(description)
-          this.config.video = { codec, description, sps, pps }
-          this.on.config && this.on.config({ kind: 'video', ...this.config.video })
+          this.videoConfig = { kind: 'video', codec, description, sps, pps }
+          this.on.config && this.on.config(this.videoConfig)
         }
       }
 
@@ -551,16 +541,19 @@ export class ParseTS {
 
       const cts = pts - dts
 
-      return { kind: 'video', type, dts, pts, cts, data }
+      return { kind: 'video', type, dts, pts, cts, data, nalus: nalus_data }
     }
   }
 
   /**
-   * 从 PES Payload 提取 H.264 NALU
+   * 解析 PTS/DTS 时间戳（33-bit，单位：90kHz）
    */
-  private extractNalus = (payload: Uint8Array) => {
-    // 从PES负载中提取H.264 NALU
-    const nalUnits = []
+  private parsePtsDts = (view: DataView, offset: number): number => {
+    return ((view.getUint8(offset) & 0x0e) << 29) | (view.getUint8(offset + 1) << 22) | ((view.getUint8(offset + 2) & 0xfe) << 14) | (view.getUint8(offset + 3) << 7) | ((view.getUint8(offset + 4) & 0xfe) >> 1)
+  }
+
+  getNalus = (payload: Uint8Array) => {
+    const nalus = []
     let currentOffset = 0
 
     while (true) {
@@ -597,30 +590,10 @@ export class ParseTS {
 
       if (payloadLength !== 0) {
         const naluData = payload.slice(startOffset, startOffset + payloadLength)
-        nalUnits.push({ type: naluType, data: naluData })
+        nalus.push({ type: naluType, data: naluData })
       }
     }
 
-    return nalUnits
-  }
-
-  /**
-   * 解析 PTS/DTS 时间戳（33-bit，单位：90kHz）
-   */
-  private parsePtsDts = (view: DataView, offset: number): number => {
-    return ((view.getUint8(offset) & 0x0e) << 29) | (view.getUint8(offset + 1) << 22) | ((view.getUint8(offset + 2) & 0xfe) << 14) | (view.getUint8(offset + 3) << 7) | ((view.getUint8(offset + 4) & 0xfe) >> 1)
-  }
-
-  private decodeIDRFrames = (nalus: Array<{ type: number; data: Uint8Array }>) => {
-    // 合并所有 IDR NALU 数据
-    const idrData = new Uint8Array(nalus.filter((n) => n.type === 5).reduce((sum, n) => sum + n.data.length, 0))
-    let offset = 0
-    nalus.forEach((nalu) => {
-      if (nalu.type === 5) {
-        idrData.set(nalu.data, offset)
-        offset += nalu.data.length
-      }
-    })
-    return idrData
+    return nalus
   }
 }

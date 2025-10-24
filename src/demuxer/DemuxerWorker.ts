@@ -1,5 +1,5 @@
+import { On, Pattern } from './Demuxer'
 import Worker from './demuxer.worker.ts?worker&inline' // 在生产环境中，可能会遇到 MIME type is text/html 的错误。可以通过添加 ?inline 参数避免单独生成 Worker 文件。
-import { On, Pattern } from './type'
 
 export class DemuxerWorker {
   worker = new Worker()
@@ -11,6 +11,9 @@ export class DemuxerWorker {
       const { action, data } = e.data
 
       switch (action) {
+        case 'onInfo':
+          this.on.info && this.on.info(data)
+          break
         case 'onConfig':
           this.on.config && this.on.config(data)
           break

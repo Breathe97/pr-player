@@ -1,4 +1,3 @@
-export type Pattern = 'hls' | 'dash' | 'rtmp' | 'flv'
 export type TagType = 'script' | 'audio' | 'video'
 
 export interface Header {
@@ -73,10 +72,4 @@ export interface VideoTag {
     version?: string
     codec?: string
   }
-}
-
-export interface On {
-  debug?: (_debug: any) => void
-  config?: (_config: any) => void
-  chunk?: (_chunk: any) => void
 }

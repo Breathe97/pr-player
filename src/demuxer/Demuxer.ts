@@ -1,14 +1,30 @@
-import { Cacher } from '../cacher/Cacher'
+import { Cacher, Chunk } from '../cacher/Cacher'
 import { ParseTS } from './ts264Parser'
 import { ParseFLV } from './flv264Parser'
-import { Pattern } from './type'
+
+export type Pattern = 'hls' | 'dash' | 'rtmp' | 'flv'
+
+export interface AudioConfig {
+  kind: 'audio'
+  codec: string
+  sampleRate: number
+  numberOfChannels: number
+}
+
+export interface VideoConfig {
+  kind: 'video'
+  codec: string
+  sps: Uint8Array
+  pps: Uint8Array
+  description: Uint8Array
+}
 
 export interface On {
-  debug?: (_debug: any) => void
-  config?: (_config: any) => void
-  chunk?: (_chunk: any) => void
-  audio?: (_audio: any) => void
-  video?: (_video: any) => void
+  debug?: (_debug: unknown) => void
+  info?: (_info: any) => void
+  config?: (_config: AudioConfig | VideoConfig) => void
+  chunk?: (_chunk: Chunk) => void
+  sei?: (_sei: Uint8Array[]) => void
 }
 
 export class Demuxer {
@@ -43,8 +59,13 @@ export class Demuxer {
     }
     if (!this.parser) return
     this.parser.on.debug = (e) => this.on.debug && this.on.debug(e)
+    this.parser.on.info = (info) => this.on.info && this.on.info(info)
     this.parser.on.config = (config) => this.on.config && this.on.config(config)
-    this.parser.on.chunk = this.onChunk
+
+    this.parser.on.chunk = (chunk) => {
+      this.cacher.pushChunk(chunk)
+      this.on.chunk && this.on.chunk(chunk)
+    }
   }
 
   push = (payload: Uint8Array) => {
@@ -58,11 +79,6 @@ export class Demuxer {
     this.cacher.destroy()
     this.isParseing = false
     this.offset = 0
-  }
-
-  private onChunk = (chunk: any) => {
-    this.cacher.pushChunk(chunk)
-    this.on.chunk && this.on.chunk(chunk)
   }
 
   private parse = async () => {

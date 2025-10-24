@@ -62,8 +62,8 @@ const info = ref()
 
 const player = new PrPlayer()
 
-player.on.demuxer.script = (e) => {
-  info.value = e.body
+player.on.demuxer.info = (e) => {
+  info.value = e
 }
 
 const pause = ref(false)

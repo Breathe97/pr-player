@@ -1,3 +1,13 @@
+export interface Chunk {
+  kind: 'audio' | 'video'
+  type: 'key' | 'delta'
+  cts: number | undefined
+  dts: number
+  pts: number | undefined
+  data: Uint8Array
+  nalus?: Uint8Array[]
+}
+
 export class Cacher {
   private pendingPayloads: Uint8Array[] = [] // 所有原始分段数据
   private payload = new Uint8Array(0) // 当前正在复解的原始数据

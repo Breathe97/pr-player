@@ -4,30 +4,16 @@ import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
 import { PrFetch } from 'pr-fetch'
-import { ScriptTag, AudioTag, VideoTag } from './demuxer/type'
 import { Shader } from './render/type'
 import { getFormatFromUrlPattern, stopStream, createRender } from './tools'
 import { PrResolves } from './PrResolves'
-
-// demux.on(Events.DEMUX_DATA, (e) => {
-//   if (!window.aaa) {
-//     window.aaa = 0
-//   }
-//   if (window.aaa === 2) return
-//   if (e.pid === 258) {
-//     window.aaa += 1
-//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: demux`, e)
-//   }
-//   // if (e.stream_type === 15) {
-//   //     console.log(e)
-//   // }
-// })
+import { parseNalu } from './demuxer/264Parser'
 
 interface On {
   demuxer: {
-    script?: (_tag: ScriptTag) => void
-    audio?: (_tag: AudioTag) => void
-    video?: (_tag: VideoTag) => void
+    info?: (_info: any) => void
+    config?: (_config: any) => void
+    chunk?: (_chunk: any) => void
     sei?: (_payload: Uint8Array) => void
   }
   decoder: {
@@ -214,13 +200,20 @@ export class PrPlayer {
     this.demuxerWorker = new DemuxerWorker()
     this.demuxerWorker.init(pattern)
 
+    this.demuxerWorker.on.info = (info) => {
+      this.on.demuxer.info && this.on.demuxer.info(info)
+    }
+
     this.demuxerWorker.on.config = (config) => {
       console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
+      this.on.demuxer.config && this.on.demuxer.config(config)
       const { kind } = config
 
       switch (kind) {
         case 'audio':
           {
+            const { codec, sampleRate, numberOfChannels } = config
+            this.decoderWorker?.audio.init({ codec, sampleRate, numberOfChannels })
           }
           break
         case 'video':
@@ -234,41 +227,37 @@ export class PrPlayer {
       }
     }
 
-    this.demuxerWorker.on.chunk = (chunk: any) => {
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+    this.demuxerWorker.on.chunk = (chunk) => {
+      this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
 
       switch (kind) {
         case 'audio':
+          {
+            const { type, dts, data } = chunk
+            const timestamp = dts * 1
+            // this.decoderWorker.video.decode({ type, timestamp, data })
+          }
           break
         case 'video':
           {
-            const { type, dts, data } = chunk
+            const { type, dts, data, nalus = [] } = chunk
             const timestamp = dts * 1000
             this.decoderWorker.video.decode({ type, timestamp, data })
+            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: nalus`, nalus)
 
-            // const { avcPacketType, frameType, data, nalus = [] } = body
-            // this.decoderWorker.video.decode({ type, timestamp: timestamp * 1000, data })
-            // // 初始化解码器
-            // if (avcPacketType === 0) {
-            //   const { codec, data: description } = body
-            //   this.decoderWorker.video.init({ codec, description })
-            //   this.renderWorker?.setBaseTime(this.renderBaseTime)
-            // }
-            // // 解码
-            // else if (avcPacketType === 1) {
-            //   const type = frameType === 1 ? 'key' : 'delta'
-
-            //   for (const nalu of nalus) {
-            //     const { header, payload } = nalu
-            //     const { nal_unit_type } = header
-            //     // 解析SEI
-            //     if (nal_unit_type === 6) {
-            //       this.on.demuxer.sei && this.on.demuxer.sei(payload)
-            //     }
-            //   }
-            // }
+            for (const nalu of nalus) {
+              // if(nalu)
+              const { size, header, data } = parseNalu(nalu)
+              console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: ${size}`, header)
+              const { nal_unit_type } = header
+              // 解析SEI
+              if (nal_unit_type === 6) {
+                this.on.demuxer.sei && this.on.demuxer.sei(data)
+              }
+            }
           }
           break
       }
