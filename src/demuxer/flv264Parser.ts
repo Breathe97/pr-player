@@ -42,64 +42,67 @@ export class ParseFLV {
       if (offset + 4 > view.byteLength) break
       const isSurplus = this.isSurplusTag(view, offset) // 判断后续数据是否是完整tag 如果不是则跳出本次解析 等待后续数据
       if (isSurplus === false) break // 后续数据长度不足 终止本次解析
+      offset += 4
 
-      const tagHeader = this.parseTagHeader(view, offset + 4) // previousTagSize(4)
+      const tagHeader = this.parseTagHeader(view, offset) // previousTagSize(4)
+      offset += 11
+
       const { tagType, dataSize, timestamp: dts } = tagHeader
-      if (!tagType) break
+      if (tagType) {
+        const tagBody = this.parseTagBody(tagType, view, offset, dataSize) // previousTagSize(4) tagHeader(11)
 
-      const tagBody = this.parseTagBody(tagType, view, offset + 4 + 11, dataSize) // previousTagSize(4) tagHeader(11)
-
-      switch (tagType) {
-        case 'script':
-          {
-            this.on.info && this.on.info(tagBody)
-          }
-          break
-        case 'audio':
-          {
-            const { accPacketType } = tagBody
-
-            // 音频配置
-            if (accPacketType === 0) {
-              const { codec, sampleRate, channelConfiguration } = tagBody
-              this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels: channelConfiguration }
-              this.on.config && this.on.config(this.audioConfig)
+        switch (tagType) {
+          case 'script':
+            {
+              this.on.info && this.on.info(tagBody)
             }
-            // 音频帧数据
-            else {
-              const { cts, data } = tagBody
-              const type = 'key'
-              const pts = cts === undefined ? undefined : cts + dts
+            break
+          case 'audio':
+            {
+              const { accPacketType } = tagBody
 
-              this.on.chunk && this.on.chunk({ kind: 'audio', type, dts, pts, cts, data })
+              // 音频配置
+              if (accPacketType === 0) {
+                const { codec, sampleRate, channelConfiguration } = tagBody
+                this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels: channelConfiguration }
+                this.on.config && this.on.config(this.audioConfig)
+              }
+              // 音频帧数据
+              else {
+                const { cts, data } = tagBody
+                const type = 'key'
+                const pts = cts === undefined ? undefined : cts + dts
+
+                this.on.chunk && this.on.chunk({ kind: 'audio', type, dts, pts, cts, data })
+              }
             }
-          }
-          break
+            break
 
-        case 'video':
-          {
-            const { avcPacketType } = tagBody
+          case 'video':
+            {
+              const { avcPacketType } = tagBody
 
-            // 视频配置
-            if (avcPacketType === 0) {
-              const { codec, sps, pps, data: description } = tagBody
-              this.videoConfig = { kind: 'video', codec, description, sps, pps }
-              this.on.config && this.on.config(this.videoConfig)
+              // 视频配置
+              if (avcPacketType === 0) {
+                const { codec, sps, pps, data: description } = tagBody
+                this.videoConfig = { kind: 'video', codec, description, sps, pps }
+                this.on.config && this.on.config(this.videoConfig)
+              }
+              // 视频帧数据
+              else {
+                const { frameType, cts, data, nalus } = tagBody
+                const type = frameType === 1 ? 'key' : 'delta'
+                const pts = cts === undefined ? undefined : cts + dts
+
+                this.on.chunk && this.on.chunk({ kind: 'video', type, dts, pts, cts, data, nalus })
+                await new Promise((resolve) => setTimeout(() => resolve(true), 8))
+              }
             }
-            // 视频帧数据
-            else {
-              const { frameType, cts, data, nalus } = tagBody
-              const type = frameType === 1 ? 'key' : 'delta'
-              const pts = cts === undefined ? undefined : cts + dts
+            break
+        }
 
-              this.on.chunk && this.on.chunk({ kind: 'video', type, dts, pts, cts, data, nalus })
-              await new Promise((resolve) => setTimeout(() => resolve(true), 8))
-            }
-          }
-          break
+        offset += dataSize // previousTagSize(4) tagHeader(11) tagBody(dataSize)
       }
-
-      offset = offset + 4 + 11 + dataSize // previousTagSize(4) tagHeader(11) tagBody(dataSize)
     }
     return offset
   }
@@ -328,7 +331,8 @@ export class ParseFLV {
 
             const maxSize = currentOffset + dataSize - 5
 
-            while (currentOffset + 4 < maxSize) {
+            while (true) {
+              if (currentOffset + 4 > maxSize) break
               // NALU长度
               const size = view.getUint32(currentOffset, false)
 

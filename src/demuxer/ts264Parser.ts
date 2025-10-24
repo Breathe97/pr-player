@@ -291,6 +291,7 @@ export class ParseTS {
     // 解析 CRC
     const crc32 = view.getUint32(currentOffset)
     this.pat = { header, programs, crc32 }
+    // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: this.pat`, this.pat)
     this.on.pat && this.on.pat(this.pat)
   }
 

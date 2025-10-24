@@ -15,6 +15,9 @@ export class Cacher {
 
   push = (payload: Uint8Array) => {
     this.pendingPayloads.push(payload)
+    if (this.pendingPayloads.length > 1000) {
+      this.pendingPayloads.shift()
+    }
   }
 
   next = (offset: number = 0) => {

@@ -1,11 +1,11 @@
 import { On } from './type'
 
 export class Decoder {
-  private audioDecoderConfig: AudioDecoderConfig | undefined
-  private audioDecoder: AudioDecoder | undefined
+  private audioDecoderConfig?: AudioDecoderConfig
+  private audioDecoder?: AudioDecoder
 
-  private videoDecoderConfig: VideoDecoderConfig | undefined
-  private videoDecoder: VideoDecoder | undefined
+  private videoDecoderConfig?: VideoDecoderConfig
+  private videoDecoder?: VideoDecoder
 
   private hasKeyFrame = false
 
@@ -59,7 +59,7 @@ export class Decoder {
           }
         },
         error: (e) => {
-          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: e`, e)
+          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: e`, e);
           this.on.video.error && this.on.video.error(e)
         }
       })
