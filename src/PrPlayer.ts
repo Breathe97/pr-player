@@ -229,16 +229,17 @@ export class PrPlayer {
 
     this.demuxerWorker.on.chunk = (chunk) => {
       this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
 
       switch (kind) {
         case 'audio':
           {
+            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
             const { type, dts, data } = chunk
             const timestamp = dts * 1
-            // this.decoderWorker.video.decode({ type, timestamp, data })
+            this.decoderWorker.audio.decode({ type, timestamp, data })
           }
           break
         case 'video':
@@ -246,12 +247,10 @@ export class PrPlayer {
             const { type, dts, data, nalus = [] } = chunk
             const timestamp = dts * 1000
             this.decoderWorker.video.decode({ type, timestamp, data })
-            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: nalus`, nalus)
 
             for (const nalu of nalus) {
-              // if(nalu)
-              const { size, header, data } = parseNalu(nalu)
-              console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: ${size}`, header)
+              if (nalu.byteLength < 4) continue
+              const { header, data } = parseNalu(nalu)
               const { nal_unit_type } = header
               // 解析SEI
               if (nal_unit_type === 6) {

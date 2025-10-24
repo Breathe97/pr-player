@@ -172,6 +172,12 @@ export class ParseTS {
           const payload = this.payloadMap.get(pid)
           if (payload) {
             switch (streamInfo.kind) {
+              case 'audio':
+                {
+                  // const chunk = (await this.parseVideo(payload)) as any
+                  // this.on.chunk && this.on.chunk({ ...chunk, kind: 'audio' })
+                }
+                break
               case 'video':
                 {
                   const chunk = (await this.parseVideo(payload)) as any
