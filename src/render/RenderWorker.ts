@@ -6,8 +6,9 @@ export class RenderWorker {
 
   constructor() {}
 
-  init = ({ offscreenCanvas, baseTime = 0, writable }: { offscreenCanvas: OffscreenCanvas; baseTime?: number; writable: any }) => this.worker.postMessage({ action: 'init', data: { offscreenCanvas, baseTime, writable } }, [offscreenCanvas, writable])
+  init = ({ offscreenCanvas, writable }: { offscreenCanvas: OffscreenCanvas; writable: any }) => this.worker.postMessage({ action: 'init', data: { offscreenCanvas, writable } }, [offscreenCanvas, writable])
   setShader = (shader: Shader[]) => this.worker.postMessage({ action: 'setShader', data: shader })
+  setBaseTime = (baseTime: number) => this.worker.postMessage({ action: 'setBaseTime', data: baseTime })
   setSize = ({ width, height }: { width: number; height: number }) => this.worker.postMessage({ action: 'setSize', data: { width, height } })
   push = (frame: { timestamp: number; bitmap: ImageBitmap }) => this.worker.postMessage({ action: 'push', data: frame })
   setCut = async (cutOption: CutOption) => this.worker.postMessage({ action: 'setCut', data: cutOption })

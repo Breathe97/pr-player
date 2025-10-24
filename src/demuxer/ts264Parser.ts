@@ -62,10 +62,16 @@ export interface Pmt {
   streams: Array<{ kind: string; stream_type: number; elementary_pid: number; es_info_length: number }>
   crc32: number
 }
+
 export interface Config {
-  sps?: Uint8Array
-  pps?: Uint8Array
-  description?: Uint8Array
+  audio?: {}
+
+  video?: {
+    codec?: string
+    sps?: Uint8Array
+    pps?: Uint8Array
+    description?: Uint8Array
+  }
 }
 
 export interface PESPacket {
@@ -78,6 +84,8 @@ export interface PESPacket {
 export interface On {
   debug?: (_debug: any) => void
   config?: (_config: any) => void
+  chunk?: (_chunk: any) => void
+
   pat?: (_pat: Pat) => void
   pmt?: (_pmt: Pmt) => void
   audio?: (_e: any) => void
@@ -87,7 +95,10 @@ export interface On {
 export class ParseTS {
   pat?: Pat
   pmt?: Pmt
-  config: Config = {}
+  config: Config = {
+    audio: undefined,
+    video: undefined
+  }
 
   payloadMap: Map<number, Uint8Array> = new Map()
 
@@ -95,7 +106,22 @@ export class ParseTS {
 
   constructor() {}
 
-  parseTsPacket = (view: DataView, offset: number) => {
+  parse = async (view: DataView) => {
+    let offset = 0
+    while (true) {
+      if (offset + 188 > view.byteLength) break
+
+      if (view.getInt8(offset) != 0x47) {
+        offset++
+        continue
+      }
+      await this.parsePacket(view, offset)
+      offset += 188
+    }
+    return offset
+  }
+
+  private parsePacket = async (view: DataView, offset: number) => {
     if (offset + 188 > view.byteLength) {
       throw new Error('Invalid TS packet')
     }
@@ -158,7 +184,9 @@ export class ParseTS {
             switch (streamInfo.kind) {
               case 'video':
                 {
-                  this.parseVideo(payload)
+                  const chunk = await this.parseVideo(payload)
+                  this.on.chunk && this.on.chunk(chunk)
+                  await new Promise((resolve) => setTimeout(() => resolve(true), 8))
                 }
                 break
             }
@@ -185,7 +213,7 @@ export class ParseTS {
   }
 
   // Header
-  parseHeader = (view: DataView, offset: number) => {
+  private parseHeader = (view: DataView, offset: number) => {
     let currentOffset = offset
     const sync_byte = view.getUint8(currentOffset) // 第0-7位(8b) 固定为 0x47，用于标识 TS 包的开始。
     const byte2 = view.getUint8(currentOffset + 1)
@@ -208,7 +236,7 @@ export class ParseTS {
   }
 
   // PAT表
-  parsePAT = (view: DataView, offset: number) => {
+  private parsePAT = (view: DataView, offset: number) => {
     let currentOffset = offset
 
     // PAT 头部固定为 ​​8 字节​​
@@ -271,7 +299,7 @@ export class ParseTS {
   }
 
   // PMT表
-  parsePMT = (view: DataView, offset: number) => {
+  private parsePMT = (view: DataView, offset: number) => {
     let currentOffset = offset
 
     // PMT 头部固定为 ​​12 字节​​
@@ -343,7 +371,7 @@ export class ParseTS {
   }
 
   // AdaptationField
-  parseAdaptationField = (view: DataView, offset: number) => {
+  private parseAdaptationField = (view: DataView, offset: number) => {
     let currentOffset = offset
 
     let pcr, opcr, splice_countdown, transport_private_data
@@ -405,7 +433,7 @@ export class ParseTS {
     return { discontinuity_indicator, random_access_indicator, elementary_stream_priority_indicator, pcr_flag, opcr_flag, splicing_point_flag, transport_private_data_flag, adaptation_field_extension_flag, pcr, opcr, splice_countdown, transport_private_data }
   }
 
-  parseVideo = async (payload: Uint8Array) => {
+  private parseVideo = async (payload: Uint8Array) => {
     const view = new DataView(payload.buffer)
     let currentOffset = 0
 
@@ -455,9 +483,9 @@ export class ParseTS {
 
         // 解析 pts dts
         if (pts_dts_flags === 0b10 || pts_dts_flags === 0b11) {
-          pts = this.parsePtsDts(view, currentOffset)
+          pts = this.parsePtsDts(view, currentOffset) / 90
           if (pts_dts_flags === 0b11) {
-            dts = this.parsePtsDts(view, currentOffset + 5)
+            dts = this.parsePtsDts(view, currentOffset + 5) / 90
           }
         }
         currentOffset += pes_header_data_length
@@ -471,32 +499,32 @@ export class ParseTS {
       const nalus = this.extractNalus(pes_payload)
 
       // 获取 sps pps
-      if (!this.config.description) {
+      if (!this.config.video) {
+        let sps, pps
         // sps
         {
           const nalu = nalus.find((nalu) => nalu.type === 7)
-          this.config.sps = nalu?.data
+          sps = nalu?.data
         }
         // pps
         {
           const nalu = nalus.find((nalu) => nalu.type === 8)
-          this.config.pps = nalu?.data
+          pps = nalu?.data
         }
-        const { sps, pps } = this.config
         if (sps && pps) {
           const description = createAVCC(sps, pps)
-          const res = parseAVCC(description)
-          this.config = { ...this.config, description, ...res }
-          this.on.config && this.on.config(this.config)
+          const { codec } = parseAVCC(description)
+          this.config.video = { codec, description, sps, pps }
+          this.on.config && this.on.config({ kind: 'video', ...this.config.video })
         }
       }
 
       const nalus_data = []
 
-      let frameType: 'key' | 'delta' = 'delta'
+      let type: 'key' | 'delta' = 'delta'
       for (const nalu of nalus) {
-        const { type, data } = nalu
-        switch (type) {
+        const { type: naluType, data } = nalu
+        switch (naluType) {
           case 9:
             {
               nalus_data.push(data)
@@ -504,32 +532,33 @@ export class ParseTS {
             break
           case 1:
             {
-              frameType = 'delta'
+              type = 'delta'
               nalus_data.push(data)
             }
             break
           case 5:
             {
-              frameType = 'key'
+              type = 'key'
               nalus_data.push(data)
             }
             break
         }
       }
 
-      const res = nalusToAVCC(nalus_data)
+      const data = nalusToAVCC(nalus_data)
 
       const { dts = 0, pts = 0 } = pes_header
+
       const cts = pts - dts
 
-      this.on.video && this.on.video({ type: frameType, dts, pts, cts, data: res })
+      return { kind: 'video', type, dts, pts, cts, data }
     }
   }
 
   /**
    * 从 PES Payload 提取 H.264 NALU
    */
-  extractNalus = (payload: Uint8Array) => {
+  private extractNalus = (payload: Uint8Array) => {
     // 从PES负载中提取H.264 NALU
     const nalUnits = []
     let currentOffset = 0
@@ -578,11 +607,11 @@ export class ParseTS {
   /**
    * 解析 PTS/DTS 时间戳（33-bit，单位：90kHz）
    */
-  parsePtsDts = (view: DataView, offset: number): number => {
+  private parsePtsDts = (view: DataView, offset: number): number => {
     return ((view.getUint8(offset) & 0x0e) << 29) | (view.getUint8(offset + 1) << 22) | ((view.getUint8(offset + 2) & 0xfe) << 14) | (view.getUint8(offset + 3) << 7) | ((view.getUint8(offset + 4) & 0xfe) >> 1)
   }
 
-  decodeIDRFrames = (nalus: Array<{ type: number; data: Uint8Array }>) => {
+  private decodeIDRFrames = (nalus: Array<{ type: number; data: Uint8Array }>) => {
     // 合并所有 IDR NALU 数据
     const idrData = new Uint8Array(nalus.filter((n) => n.type === 5).reduce((sum, n) => sum + n.data.length, 0))
     let offset = 0

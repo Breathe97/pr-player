@@ -151,7 +151,6 @@ export class PrPlayer {
    * 初始化
    */
   init = () => {
-    this.initDemuxer()
     this.initDecoder()
     this.audioPlayer = new AudioPlayer()
     this.audioPlayer.init()
@@ -170,7 +169,7 @@ export class PrPlayer {
     const pattern = getFormatFromUrlPattern(url)
     if (pattern === 'unknown') throw new Error('This address cannot be parsed.')
 
-    this.demuxerWorker?.setPattern(pattern)
+    this.initDemuxer(pattern)
 
     switch (pattern) {
       case 'flv':
@@ -209,100 +208,69 @@ export class PrPlayer {
   }
 
   /**
-   * 监听媒体 tag
+   * 初始化解复器
    */
-  private onTag = (e: any) => {
-    if (!this.decoderWorker) return
-    const { header, body } = e
-    const { tagType, timestamp } = header
-    // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: ${tagType}`, e)
-    switch (tagType) {
-      case 'script':
-        {
-          const { width, height } = body
-          this.renderWorker?.setSize({ width, height })
-          this.on.demuxer.script && this.on.demuxer.script(e)
-          this.renderBaseTime = new Date().getTime() // 设置渲染基准时间
-        }
-        break
-      case 'audio':
-        {
-          const { accPacketType, data } = body
-
-          // 初始化解码器
-          if (accPacketType === 0) {
-            const { codec, sampleRate, channelConfiguration } = body
-            const config: AudioDecoderConfig = { codec, sampleRate, numberOfChannels: channelConfiguration, description: new Uint8Array([]) }
-            this.decoderWorker.audio.init(config)
-          }
-          // 解码
-          else if (accPacketType === 1) {
-            const type = 'key'
-            this.decoderWorker.audio.decode({ type, timestamp: timestamp * 1, data })
-          }
-          this.on.demuxer.audio && this.on.demuxer.audio(e)
-        }
-        break
-      case 'video':
-        {
-          const { avcPacketType, frameType, data, nalus = [] } = body
-          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: body`, body)
-
-          // 初始化解码器
-          if (avcPacketType === 0) {
-            const { codec, data: description } = body
-            this.decoderWorker.video.init({ codec, description })
-          }
-          // 解码
-          else if (avcPacketType === 1) {
-            const type = frameType === 1 ? 'key' : 'delta'
-            this.decoderWorker.video.decode({ type, timestamp: timestamp * 1000, data })
-
-            for (const nalu of nalus) {
-              const { header, payload } = nalu
-              const { nal_unit_type } = header
-              // 解析SEI
-              if (nal_unit_type === 6) {
-                this.on.demuxer.sei && this.on.demuxer.sei(payload)
-              }
-            }
-          }
-          this.on.demuxer.video && this.on.demuxer.video(e)
-        }
-        break
-    }
-  }
-
-  /**
-   * 初始化分离器
-   */
-  private initDemuxer = () => {
+  private initDemuxer = (pattern: any) => {
     this.demuxerWorker = new DemuxerWorker()
-    this.demuxerWorker.init()
-    this.demuxerWorker.on.tag = this.onTag
+    this.demuxerWorker.init(pattern)
 
-    this.demuxerWorker.on.ts = {
-      debug: (_e) => {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, _e)
-      },
-      pat: (_pat) => {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: _pat`, _pat)
-      },
-      pmt: (_pmt) => {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: _pmt`, _pmt)
-      },
-      config: (config) => {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
-        const { codec, description } = config
-        this.decoderWorker?.video.init({ codec, description })
-      },
-      audio: (_e) => {
-        // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: audio`, _e)
-      },
-      video: (video) => {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
-        const { type, dts, data } = video
-        this.decoderWorker?.video.decode({ type, timestamp: dts * 1000, data })
+    this.demuxerWorker.on.config = (config) => {
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
+      const { kind } = config
+
+      switch (kind) {
+        case 'audio':
+          {
+          }
+          break
+        case 'video':
+          {
+            const { codec, description } = config
+            this.decoderWorker?.video.init({ codec, description })
+            this.renderBaseTime = new Date().getTime() // 设置渲染基准时间
+            this.renderWorker?.setBaseTime(this.renderBaseTime)
+          }
+          break
+      }
+    }
+
+    this.demuxerWorker.on.chunk = (chunk: any) => {
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+      if (!this.decoderWorker) return
+      const { kind } = chunk
+
+      switch (kind) {
+        case 'audio':
+          break
+        case 'video':
+          {
+            const { type, dts, data } = chunk
+            const timestamp = dts * 1000
+            this.decoderWorker.video.decode({ type, timestamp, data })
+
+            // const { avcPacketType, frameType, data, nalus = [] } = body
+            // this.decoderWorker.video.decode({ type, timestamp: timestamp * 1000, data })
+            // // 初始化解码器
+            // if (avcPacketType === 0) {
+            //   const { codec, data: description } = body
+            //   this.decoderWorker.video.init({ codec, description })
+            //   this.renderWorker?.setBaseTime(this.renderBaseTime)
+            // }
+            // // 解码
+            // else if (avcPacketType === 1) {
+            //   const type = frameType === 1 ? 'key' : 'delta'
+
+            //   for (const nalu of nalus) {
+            //     const { header, payload } = nalu
+            //     const { nal_unit_type } = header
+            //     // 解析SEI
+            //     if (nal_unit_type === 6) {
+            //       this.on.demuxer.sei && this.on.demuxer.sei(payload)
+            //     }
+            //   }
+            // }
+          }
+          break
       }
     }
   }
@@ -341,7 +309,7 @@ export class PrPlayer {
    * 初始化渲染器
    */
   private initRender = () => {
-    const { worker, canvas, stream } = createRender(this.renderBaseTime)
+    const { worker, canvas, stream } = createRender()
 
     this.renderWorker = worker
 
@@ -392,7 +360,8 @@ export class PrPlayer {
         return renderIns
       }
 
-      renderIns = createRender(this.renderBaseTime)
+      renderIns = createRender()
+      renderIns.worker.setBaseTime(this.renderBaseTime)
       renderIns.worker.setCut(cutOption)
       this.cutRenders.set(key, renderIns)
       return renderIns

@@ -21,13 +21,18 @@ export class Render {
 
   constructor() {}
 
-  init = ({ offscreenCanvas, baseTime = performance.timeOrigin, writable }: { offscreenCanvas: OffscreenCanvas; baseTime?: number; writable: any }) => {
+  init = ({ offscreenCanvas, writable }: { offscreenCanvas: OffscreenCanvas; writable: any }) => {
     this.destroy()
     this.offscreenCanvas = offscreenCanvas
     this.writable = writable
     this.writer = this.writable.getWriter()
-
     this.ctx = this.offscreenCanvas.getContext('2d')
+  }
+
+  /**
+   * 设置渲染基准时间
+   */
+  setBaseTime = (baseTime: number) => {
     this.baseTime = baseTime
   }
 

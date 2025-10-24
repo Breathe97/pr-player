@@ -11,36 +11,20 @@ export class DemuxerWorker {
       const { action, data } = e.data
 
       switch (action) {
-        case 'onHeader':
-          this.on.header && this.on.header(data)
-          break
-        case 'onTag':
-          this.on.tag && this.on.tag(data)
+        case 'onConfig':
+          this.on.config && this.on.config(data)
           break
         case 'onDebug':
-          this.on.ts?.debug && this.on.ts.debug(data)
+          this.on.debug && this.on.debug(data)
           break
-        case 'onTsPat':
-          this.on.ts?.pat && this.on.ts.pat(data)
-          break
-        case 'onTsPmt':
-          this.on.ts?.pmt && this.on.ts.pmt(data)
-          break
-        case 'onTsConfig':
-          this.on.ts?.config && this.on.ts.config(data)
-          break
-        case 'onTsAudio':
-          this.on.ts?.audio && this.on.ts.audio(data)
-          break
-        case 'onTsVideo':
-          this.on.ts?.video && this.on.ts.video(data)
+        case 'onChunk':
+          this.on.chunk && this.on.chunk(data)
           break
       }
     }
   }
 
-  init = () => this.worker.postMessage({ action: 'init' })
-  setPattern = (pattern: Pattern) => this.worker.postMessage({ action: 'setPattern', data: pattern })
+  init = (pattern: Pattern) => this.worker.postMessage({ action: 'init', data: pattern })
   push = (payload: Uint8Array) => this.worker.postMessage({ action: 'push', data: payload })
   destroy = () => {
     this.worker.postMessage({ action: 'destroy', data: {} })

@@ -1,7 +1,7 @@
 import { Render } from './Render'
 
 interface WorkerMessage {
-  action: 'init' | 'setSize' | 'setShader' | 'push' | 'setCut' | 'setPause' | 'destroy'
+  action: 'init' | 'setSize' | 'setShader' | 'setBaseTime' | 'push' | 'setCut' | 'setPause' | 'destroy'
   data: any
 }
 

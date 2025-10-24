@@ -33,7 +33,7 @@ export const stopStream = (stream: MediaStream | undefined) => {
   }
 }
 
-export const createRender = (baseTime: number) => {
+export const createRender = () => {
   const worker = new RenderWorker()
 
   const canvas = document.createElement('canvas')
@@ -48,8 +48,7 @@ export const createRender = (baseTime: number) => {
     worker.destroy()
     stopStream(stream)
   }
-
-  worker.init({ offscreenCanvas, baseTime, writable: trackGenerator.writable })
+  worker.init({ offscreenCanvas, writable: trackGenerator.writable })
 
   return { worker, canvas, stream, destroy }
 }

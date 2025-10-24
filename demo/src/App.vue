@@ -44,7 +44,7 @@ const url_options = [
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' }
 ]
 
-const url_type = ref<'flv' | 'hls'>('hls')
+const url_type = ref<'flv' | 'hls'>('flv')
 
 const url = ref('')
 
