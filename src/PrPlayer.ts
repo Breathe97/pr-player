@@ -3,11 +3,12 @@ import { DecoderWorker } from './decoder/DecoderWorker'
 import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
-import { PrFetch } from 'pr-fetch'
+// import { PrFetch } from 'pr-fetch'
 import { Shader } from './render/type'
 import { getFormatFromUrlPattern, stopStream, createRender } from './tools'
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/264Parser'
+import { PrFetch } from './PrFetch'
 
 interface On {
   demuxer: {
@@ -260,7 +261,7 @@ export class PrPlayer {
       this.on.decoder.audio && this.on.decoder.audio(audioData)
     }
     this.decoderWorker.on.audio.error = (e) => {
-      // this.stop()
+      this.stop()
       this.on.error && this.on.error(e)
     }
 
@@ -274,7 +275,7 @@ export class PrPlayer {
       frame.bitmap.close()
     }
     this.decoderWorker.on.video.error = (e) => {
-      // this.stop()
+      this.stop()
       this.on.error && this.on.error(e)
     }
   }

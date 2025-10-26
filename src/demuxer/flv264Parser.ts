@@ -39,17 +39,14 @@ export class ParseFLV {
     }
 
     while (true) {
-      if (offset + 4 > view.byteLength) break
       const isSurplus = this.isSurplusTag(view, offset) // 判断后续数据是否是完整tag 如果不是则跳出本次解析 等待后续数据
       if (isSurplus === false) break // 后续数据长度不足 终止本次解析
-      offset += 4
 
-      const tagHeader = this.parseTagHeader(view, offset) // previousTagSize(4)
-      offset += 11
+      const tagHeader = this.parseTagHeader(view, offset + 4) // previousTagSize(4)
 
       const { tagType, dataSize, timestamp: dts } = tagHeader
       if (tagType) {
-        const tagBody = this.parseTagBody(tagType, view, offset, dataSize) // previousTagSize(4) tagHeader(11)
+        const tagBody = this.parseTagBody(tagType, view, offset + 4 + 11, dataSize) // previousTagSize(4) tagHeader(11)
 
         switch (tagType) {
           case 'script':
@@ -95,14 +92,14 @@ export class ParseFLV {
                 const pts = cts === undefined ? undefined : cts + dts
 
                 this.on.chunk && this.on.chunk({ kind: 'video', type, dts, pts, cts, data, nalus })
-                await new Promise((resolve) => setTimeout(() => resolve(true), 8))
               }
             }
             break
         }
 
-        offset += dataSize // previousTagSize(4) tagHeader(11) tagBody(dataSize)
+        offset = offset + 4 + 11 + dataSize // previousTagSize(4) tagHeader(11) tagBody(dataSize)
       }
+      await new Promise((resolve) => setTimeout(() => resolve(true), 8))
     }
     return offset
   }
@@ -193,7 +190,6 @@ export class ParseFLV {
     {
       streamID = getUint24(view, offset + 8)
     }
-
     return { tagType, dataSize, timestamp, timestampExtended, streamID }
   }
 
