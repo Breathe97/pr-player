@@ -3,12 +3,11 @@ import { DecoderWorker } from './decoder/DecoderWorker'
 import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
-// import { PrFetch } from 'pr-fetch'
+import { PrFetch } from 'pr-fetch'
 import { Shader } from './render/type'
 import { getFormatFromUrlPattern, stopStream, createRender } from './tools'
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/264Parser'
-import { PrFetch } from './PrFetch'
 
 interface On {
   demuxer: {
@@ -73,7 +72,6 @@ export class PrPlayer {
 
     const pattern = getFormatFromUrlPattern(url)
     if (pattern === 'unknown') throw new Error('This address cannot be parsed.')
-
     this.initDemuxer(pattern)
 
     switch (pattern) {
@@ -187,6 +185,10 @@ export class PrPlayer {
     this.demuxerWorker = new DemuxerWorker()
     this.demuxerWorker.init(pattern)
 
+    this.demuxerWorker.on.debug = (debug) => {
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
+    }
+
     this.demuxerWorker.on.info = (info) => {
       console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
       this.on.demuxer.info && this.on.demuxer.info(info)
@@ -217,7 +219,7 @@ export class PrPlayer {
 
     this.demuxerWorker.on.chunk = (chunk) => {
       this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
 
@@ -232,6 +234,7 @@ export class PrPlayer {
           break
         case 'video':
           {
+            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
             const { type, dts, data, nalus = [] } = chunk
             const timestamp = dts * 1000
             this.decoderWorker.video.decode({ type, timestamp, data })
@@ -355,7 +358,6 @@ export class PrPlayer {
           const { done, value } = await reader.read()
           if (value) {
             const info = this.hls.parse(value)
-            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
             const { segments = [] } = info
             for (const segment of segments) {
               const res = await this.prFetch.request(segment.url)
@@ -363,6 +365,7 @@ export class PrPlayer {
               if (!reader) throw new Error('segment reader is error.')
               while (true) {
                 const { done, value } = await reader.read()
+
                 if (value) {
                   this.demuxerWorker?.push(value)
                 }

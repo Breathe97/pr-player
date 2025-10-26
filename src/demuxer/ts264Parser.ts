@@ -180,8 +180,8 @@ export class ParseTS {
                 break
               case 'video':
                 {
-                  const chunk = (await this.parseVideo(payload)) as any
-                  this.on.chunk && this.on.chunk(chunk)
+                  const chunk = await this.parseVideo(payload)
+                  this.on.chunk && this.on.chunk(chunk as any)
                   await new Promise((resolve) => setTimeout(() => resolve(true), 8))
                 }
                 break
@@ -480,12 +480,15 @@ export class ParseTS {
 
         // 解析 pts dts
         if (pts_dts_flags === 0b10 || pts_dts_flags === 0b11) {
-          pts = this.parsePtsDts(view, currentOffset) / 90
+          pts = this.parsePtsDts(view, currentOffset)
+
+          currentOffset += 5
           if (pts_dts_flags === 0b11) {
-            dts = this.parsePtsDts(view, currentOffset + 5) / 90
+            dts = this.parsePtsDts(view, currentOffset)
+            currentOffset += 5
           }
         }
-        currentOffset += pes_header_data_length
+        currentOffset += pes_header_data_length - (currentOffset - 9)
       }
       pes_header = { stream_id, pes_packet_length, pts, dts, optional_header_exist }
     }
@@ -524,7 +527,7 @@ export class ParseTS {
         switch (naluType) {
           case 9:
             {
-              nalus_data.push(data)
+              // nalus_data.push(data)
             }
             break
           case 1:
@@ -548,15 +551,23 @@ export class ParseTS {
 
       const cts = pts - dts
 
-      return { kind: 'video', type, dts, pts, cts, data, nalus: nalus_data }
+      return { kind: 'video', type, dts, pts, cts, data, nalus: nalus_data, nalusa: nalus }
     }
   }
 
   /**
    * 解析 PTS/DTS 时间戳（33-bit，单位：90kHz）
    */
-  private parsePtsDts = (view: DataView, offset: number): number => {
-    return ((view.getUint8(offset) & 0x0e) << 29) | (view.getUint8(offset + 1) << 22) | ((view.getUint8(offset + 2) & 0xfe) << 14) | (view.getUint8(offset + 3) << 7) | ((view.getUint8(offset + 4) & 0xfe) >> 1)
+  private parsePtsDts(view: DataView, offset: number) {
+    const firstByte = view.getUint8(offset)
+    const secondByte = view.getUint8(offset + 1)
+    const thirdByte = view.getUint8(offset + 2)
+    const fourthByte = view.getUint8(offset + 3)
+    const fifthByte = view.getUint8(offset + 4)
+    // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: `, [`${firstByte}`, `${secondByte}`, `${thirdByte}`, `${fourthByte}`, `${fifthByte}`])
+
+    const pts = ((BigInt(firstByte) & 0b00001110n) << 29n) | ((BigInt(secondByte) & 0b11111111n) << 22n) | ((BigInt(thirdByte) & 0b11111110n) << 14n) | ((BigInt(fourthByte) & 0b11111111n) << 7n) | ((BigInt(fifthByte) & 0b11111110n) >> 1n)
+    return Number(pts) / 90
   }
 
   getNalus = (payload: Uint8Array) => {

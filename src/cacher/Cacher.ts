@@ -15,23 +15,20 @@ export class Cacher {
 
   push = (payload: Uint8Array) => {
     this.pendingPayloads.push(payload)
-    if (this.pendingPayloads.length > 1000) {
-      this.pendingPayloads.shift()
-    }
   }
 
   next = (offset: number = 0) => {
-    const end_payload = this.payload.slice(offset)
+    this.payload = this.payload.slice(offset)
 
     const next_payload = this.pendingPayloads.shift()
 
     if (!next_payload) return false // 没有后续数据
 
     // 合并数据
-    const _payload = new Uint8Array(end_payload.byteLength + next_payload.byteLength)
+    const _payload = new Uint8Array(this.payload.byteLength + next_payload.byteLength)
 
-    _payload.set(end_payload, 0)
-    _payload.set(next_payload, end_payload.byteLength)
+    _payload.set(this.payload, 0)
+    _payload.set(next_payload, this.payload.byteLength)
 
     this.payload = _payload
 

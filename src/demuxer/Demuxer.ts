@@ -38,7 +38,7 @@ export class Demuxer {
 
   public on: On = {}
 
-  private parser: ParseTS | ParseFLV | undefined
+  private parser: ParseFLV | ParseTS | undefined
 
   constructor() {}
 
@@ -56,8 +56,10 @@ export class Demuxer {
           this.parser = new ParseTS()
         }
         break
+      default:
+        throw new Error('is error pattern.')
     }
-    if (!this.parser) return
+
     this.parser.on.debug = (e) => this.on.debug && this.on.debug(e)
     this.parser.on.info = (info) => this.on.info && this.on.info(info)
     this.parser.on.config = (config) => this.on.config && this.on.config(config)
