@@ -108,6 +108,7 @@ export class Render {
       }
 
       const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: timeUntilNextFrame`, timeUntilNextFrame, timestamp)
       await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
       this.drawImage({ timestamp, bitmap })
 

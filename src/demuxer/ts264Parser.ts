@@ -465,22 +465,24 @@ export class ParseTS {
         currentOffset += 1
 
         // 解析 PTS/DTS 标志位
-        const pts_dts_flags = (flags2 >> 6) & 0b11
+        const pts_dts_flags = flags2 >> 6
 
         // 读取 PES Header Data Length（后续可选数据的长度）
         const pes_header_data_length = view.getUint8(currentOffset)
         currentOffset += 1
-
-        // 解析 pts dts
-        if (pts_dts_flags === 0b10 || pts_dts_flags === 0b11) {
+        // 解析 pts
+        if ((pts_dts_flags & 0x02) === 0x02) {
           pts = this.parsePtsDts(view, currentOffset)
-
           currentOffset += 5
-          if (pts_dts_flags === 0b11) {
-            dts = this.parsePtsDts(view, currentOffset)
-            currentOffset += 5
-          }
         }
+        // 解析 dts
+        if ((pts_dts_flags & 0x01) === 0x01) {
+          dts = this.parsePtsDts(view, currentOffset)
+          currentOffset += 5
+        } else {
+          dts = pts
+        }
+
         currentOffset += pes_header_data_length - (currentOffset - 9)
       }
       pes_header = { stream_id, pes_packet_length, pts, dts, optional_header_exist }

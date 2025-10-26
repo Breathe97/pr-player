@@ -3,11 +3,11 @@ import { DecoderWorker } from './decoder/DecoderWorker'
 import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
-import { PrFetch } from 'pr-fetch'
 import { Shader } from './render/type'
 import { getFormatFromUrlPattern, stopStream, createRender } from './tools'
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/264Parser'
+import { PrFetch } from './PrFetch'
 
 interface On {
   demuxer: {
@@ -28,7 +28,6 @@ export class PrPlayer {
   private prResolves = new PrResolves()
 
   private url: string = ''
-  private segmentUrl: string[] = []
 
   private demuxerWorker: DemuxerWorker | undefined
   private decoderWorker: DecoderWorker | undefined
@@ -37,7 +36,7 @@ export class PrPlayer {
 
   private renderWorker: RenderWorker | undefined
 
-  private renderBaseTime = 0
+  private renderBaseTime: number | undefined
 
   private stream: MediaStream | undefined
 
@@ -94,6 +93,7 @@ export class PrPlayer {
    */
   stop = async () => {
     try {
+      clearInterval(this.hls.getSegmentsTimer)
       this.prFetch.stop()
     } catch (error) {
       console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
@@ -107,7 +107,8 @@ export class PrPlayer {
       this.cut.remove(key)
     }
     this.audioPlayer?.destroy()
-    this.renderBaseTime = 0
+    this.renderBaseTime = undefined
+
     this.canvas = undefined
   }
 
@@ -152,7 +153,7 @@ export class PrPlayer {
       }
 
       renderIns = createRender()
-      renderIns.worker.setBaseTime(this.renderBaseTime)
+      renderIns.worker.setBaseTime(this.renderBaseTime || 0)
       renderIns.worker.setCut(cutOption)
       this.cutRenders.set(key, renderIns)
       return renderIns
@@ -187,7 +188,7 @@ export class PrPlayer {
     this.demuxerWorker.init(pattern)
 
     this.demuxerWorker.on.debug = (debug) => {
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
     }
 
     this.demuxerWorker.on.info = (info) => {
@@ -211,8 +212,6 @@ export class PrPlayer {
           {
             const { codec, description } = config
             this.decoderWorker?.video.init({ codec, description })
-            this.renderBaseTime = new Date().getTime() // 设置渲染基准时间
-            this.renderWorker?.setBaseTime(this.renderBaseTime)
           }
           break
       }
@@ -236,6 +235,13 @@ export class PrPlayer {
         case 'video':
           {
             const { type, dts, data, nalus = [] } = chunk
+            // 暂存开始时间 ms
+            if (this.renderBaseTime === undefined) {
+              const now = new Date().getTime()
+              this.renderBaseTime = now - dts // 设置渲染基准时间
+              this.renderWorker?.setBaseTime(this.renderBaseTime)
+            }
+
             const timestamp = dts * 1000
             this.decoderWorker.video.decode({ type, timestamp, data })
 
@@ -318,6 +324,10 @@ export class PrPlayer {
   }
 
   private hls = {
+    isLive: false,
+    urls: [] as string[],
+    url: '',
+    getSegmentsTimer: 0,
     parse: async (value: AllowSharedBufferSource) => {
       const textDecoder = new TextDecoder('utf-8') // 指定编码格式
       const playlistText = textDecoder.decode(value)
@@ -350,42 +360,54 @@ export class PrPlayer {
       return { baseUrl, targetDuration, isLive, segments }
     },
     getSegments: async () => {
-      const res = await this.prFetch.request(this.url)
+      const prFetch = new PrFetch()
+      const res = await prFetch.request(this.url)
       const reader = res.body?.getReader()
       if (!reader) throw new Error('reader is error.')
       while (true) {
         const { done, value } = await reader.read()
         if (value) {
           const info = await this.hls.parse(value)
-          const { segments = [] } = info
+          const { segments = [], isLive = false } = info
+          this.hls.isLive = isLive
           let urls = Array.from(segments, (item: any) => item.url)
-          const index = urls.findIndex((url) => url === this.segmentUrl[this.segmentUrl.length - 1])
+          const index = urls.findIndex((url) => url === this.hls.url)
           if (index !== -1) {
             urls = urls.slice(index + 1)
           }
-          this.segmentUrl.push(...urls)
+          this.hls.urls = urls
         }
         if (done) break // 读取完成
       }
-      await new Promise((resolve) => setTimeout(() => resolve(true), 1000)) // 每一秒尝试获取最新的 segments
     },
+
+    getData: async () => {},
     start: async () => {
       try {
-        while (true) {
-          await this.hls.getSegments()
-          const url = this.segmentUrl.shift()
-          if (!url) break
-          const res = await this.prFetch.request(url)
-          const reader = res.body?.getReader()
-          if (!reader) throw new Error('segment reader is error.')
-          while (true) {
-            const { done, value } = await reader.read()
+        await this.hls.getSegments()
+        this.hls.getSegmentsTimer = window.setInterval(this.hls.getSegments, 1000)
+        if (this.hls.isLive === false) {
+          clearInterval(this.hls.getSegmentsTimer)
+        }
 
-            if (value) {
-              this.demuxerWorker?.push(value)
+        while (true) {
+          const url = this.hls.urls.shift()
+          // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: url`, url?.slice(97 + 24))
+          if (url) {
+            this.hls.url = url
+            const res = await this.prFetch.request(url)
+            const reader = res.body?.getReader()
+            if (!reader) throw new Error('segment reader is error.')
+
+            while (true) {
+              const { done, value } = await reader.read()
+              if (value) {
+                this.demuxerWorker?.push(value)
+              }
+              if (done) break // 读取完成
             }
-            if (done) break // 读取完成
           }
+          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
         }
       } catch (error: any) {
         if (error?.name !== 'AbortError') throw Error(error)

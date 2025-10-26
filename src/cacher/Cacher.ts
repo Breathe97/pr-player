@@ -37,6 +37,9 @@ export class Cacher {
 
   pushChunk = (chunk: any) => {
     this.chunks.push(chunk)
+    if (this.chunks.length > 1000) {
+      this.chunks.shift()
+    }
     // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunks`, this.chunks.length)
   }
 
