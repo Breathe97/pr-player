@@ -28,6 +28,7 @@ export class PrPlayer {
   private prResolves = new PrResolves()
 
   private url: string = ''
+  private segmentUrl: string[] = []
 
   private demuxerWorker: DemuxerWorker | undefined
   private decoderWorker: DecoderWorker | undefined
@@ -186,7 +187,7 @@ export class PrPlayer {
     this.demuxerWorker.init(pattern)
 
     this.demuxerWorker.on.debug = (debug) => {
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
     }
 
     this.demuxerWorker.on.info = (info) => {
@@ -234,7 +235,6 @@ export class PrPlayer {
           break
         case 'video':
           {
-            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
             const { type, dts, data, nalus = [] } = chunk
             const timestamp = dts * 1000
             this.decoderWorker.video.decode({ type, timestamp, data })
@@ -318,7 +318,7 @@ export class PrPlayer {
   }
 
   private hls = {
-    parse: (value: AllowSharedBufferSource) => {
+    parse: async (value: AllowSharedBufferSource) => {
       const textDecoder = new TextDecoder('utf-8') // 指定编码格式
       const playlistText = textDecoder.decode(value)
 
@@ -349,31 +349,43 @@ export class PrPlayer {
       }
       return { baseUrl, targetDuration, isLive, segments }
     },
+    getSegments: async () => {
+      const res = await this.prFetch.request(this.url)
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('reader is error.')
+      while (true) {
+        const { done, value } = await reader.read()
+        if (value) {
+          const info = await this.hls.parse(value)
+          const { segments = [] } = info
+          let urls = Array.from(segments, (item: any) => item.url)
+          const index = urls.findIndex((url) => url === this.segmentUrl[this.segmentUrl.length - 1])
+          if (index !== -1) {
+            urls = urls.slice(index + 1)
+          }
+          this.segmentUrl.push(...urls)
+        }
+        if (done) break // 读取完成
+      }
+      await new Promise((resolve) => setTimeout(() => resolve(true), 1000)) // 每一秒尝试获取最新的 segments
+    },
     start: async () => {
       try {
-        const res = await this.prFetch.request(this.url)
-        const reader = res.body?.getReader()
-        if (!reader) throw new Error('reader is error.')
         while (true) {
-          const { done, value } = await reader.read()
-          if (value) {
-            const info = this.hls.parse(value)
-            const { segments = [] } = info
-            for (const segment of segments) {
-              const res = await this.prFetch.request(segment.url)
-              const reader = res.body?.getReader()
-              if (!reader) throw new Error('segment reader is error.')
-              while (true) {
-                const { done, value } = await reader.read()
+          await this.hls.getSegments()
+          const url = this.segmentUrl.shift()
+          if (!url) break
+          const res = await this.prFetch.request(url)
+          const reader = res.body?.getReader()
+          if (!reader) throw new Error('segment reader is error.')
+          while (true) {
+            const { done, value } = await reader.read()
 
-                if (value) {
-                  this.demuxerWorker?.push(value)
-                }
-                if (done) break // 读取完成
-              }
+            if (value) {
+              this.demuxerWorker?.push(value)
             }
+            if (done) break // 读取完成
           }
-          if (done) break // 读取完成
         }
       } catch (error: any) {
         if (error?.name !== 'AbortError') throw Error(error)

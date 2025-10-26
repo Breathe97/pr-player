@@ -77,11 +77,6 @@ export interface On {
   info?: (_info: any) => void
   config?: (_config: AudioConfig | VideoConfig) => void
   chunk?: (_chunk: Chunk) => void
-
-  pat?: (_pat: Pat) => void
-  pmt?: (_pmt: Pmt) => void
-  audio?: (_e: any) => void
-  video?: (_e: any) => void
 }
 
 export class ParseTS {
@@ -149,7 +144,6 @@ export class ParseTS {
     // 解析有效载荷(如果存在)
     if (adaptation_field_control === 1 || adaptation_field_control === 3) {
       const payload = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadLength))
-
       // 解析 PAT
       {
         const isPAT = pid === 0
@@ -291,8 +285,7 @@ export class ParseTS {
     // 解析 CRC
     const crc32 = view.getUint32(currentOffset)
     this.pat = { header, programs, crc32 }
-    // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: this.pat`, this.pat)
-    this.on.pat && this.on.pat(this.pat)
+    this.on.debug && this.on.debug({ pat: this.pat })
   }
 
   // PMT表
@@ -364,7 +357,7 @@ export class ParseTS {
     // 解析 CRC
     const crc32 = view.getUint32(currentOffset)
     this.pmt = { header, streams, crc32 }
-    this.on.pmt && this.on.pmt(this.pmt)
+    this.on.debug && this.on.debug({ pmt: this.pmt })
   }
 
   // AdaptationField
