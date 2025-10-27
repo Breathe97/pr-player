@@ -192,12 +192,12 @@ export class PrPlayer {
     }
 
     this.demuxerWorker.on.info = (info) => {
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
       this.on.demuxer.info && this.on.demuxer.info(info)
     }
 
     this.demuxerWorker.on.config = (config) => {
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
       this.on.demuxer.config && this.on.demuxer.config(config)
       const { kind } = config
 
@@ -234,7 +234,7 @@ export class PrPlayer {
           break
         case 'video':
           {
-            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
             const { type, dts, data, nalus = [] } = chunk
             // 暂存开始时间 ms
             if (this.renderBaseTime === undefined) {
