@@ -521,7 +521,8 @@ export class ParseTS {
       for (const naluItem of naluItems) {
         const { type: naluType, nalu } = naluItem
         switch (naluType) {
-          case 9:
+          case 6: // sei
+          case 9: // 起始位
             {
               nalus.push(nalu)
             }
