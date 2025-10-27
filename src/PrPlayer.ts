@@ -236,7 +236,6 @@ export class PrPlayer {
 
     this.demuxerWorker.on.chunk = (chunk) => {
       this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
 
