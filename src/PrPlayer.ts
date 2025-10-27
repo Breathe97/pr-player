@@ -234,6 +234,7 @@ export class PrPlayer {
           break
         case 'video':
           {
+            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
             const { type, dts, data, nalus = [] } = chunk
             // 暂存开始时间 ms
             if (this.renderBaseTime === undefined) {

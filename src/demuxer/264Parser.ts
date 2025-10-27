@@ -43,39 +43,6 @@ export const createAVCC = (sps: Uint8Array, pps: Uint8Array) => {
   return avcc
 }
 
-export const naluToAVCC = (nalu: Uint8Array): Uint8Array => {
-  const avccNALU = new Uint8Array(4 + nalu.length)
-
-  // 写入4字节长度前缀（大端序）
-  new DataView(avccNALU.buffer).setUint32(0, nalu.length, false)
-
-  // 写入NALU数据
-  avccNALU.set(nalu, 4)
-
-  return avccNALU
-}
-
-export const nalusToAVCC = (nalus: Uint8Array[]): Uint8Array => {
-  // 计算总长度
-  let totalLength = 0
-  for (const nalu of nalus) {
-    totalLength += 4 + nalu.length // 4字节长度前缀 + NALU数据
-  }
-
-  // 创建输出缓冲区
-  const avccData = new Uint8Array(totalLength)
-  let offset = 0
-
-  // 逐个转换NALU
-  for (const nalu of nalus) {
-    const avccNalu = naluToAVCC(nalu)
-    avccData.set(avccNalu, offset)
-    offset += avccNalu.length
-  }
-
-  return avccData
-}
-
 export const parseAVCC = (avcc: Uint8Array) => {
   let currentOffset = 0
   const view = new DataView(avcc.buffer)
@@ -130,6 +97,39 @@ export const parseAVCC = (avcc: Uint8Array) => {
   currentOffset = currentOffset + pictureParameterSetLength
 
   return { version, codec, profile, compatibility, level, lengthSizeMinusOne, numOfSequenceParameterSets, sequenceParameterSetLength, sps, numOfPictureParameterSets, pictureParameterSetLength, pps }
+}
+
+export const naluToAVCC = (nalu: Uint8Array): Uint8Array => {
+  const avccNALU = new Uint8Array(4 + nalu.length)
+
+  // 写入4字节长度前缀（大端序）
+  new DataView(avccNALU.buffer).setUint32(0, nalu.length, false)
+
+  // 写入NALU数据
+  avccNALU.set(nalu, 4)
+
+  return avccNALU
+}
+
+export const mergeNalus = (nalus: Uint8Array[]): Uint8Array => {
+  // 计算总长度
+  let totalLength = 0
+  for (const nalu of nalus) {
+    totalLength += nalu.length // 4字节长度前缀 + NALU数据
+  }
+
+  // 创建输出缓冲区
+  const avccData = new Uint8Array(totalLength)
+  let offset = 0
+
+  // 逐个转换NALU
+  for (const nalu of nalus) {
+    const avccNalu = nalu
+    avccData.set(avccNalu, offset)
+    offset += avccNalu.length
+  }
+
+  return avccData
 }
 
 export const parseNalu = (nalu: Uint8Array) => {

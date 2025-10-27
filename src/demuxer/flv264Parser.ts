@@ -337,7 +337,6 @@ export class ParseFLV {
 
               nalus.push(nalu)
             }
-
             return { frameType, codecID, avcPacketType, cts, data, nalus }
           }
         }

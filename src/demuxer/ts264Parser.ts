@@ -1,7 +1,7 @@
 // 参考 https://zhuanlan.zhihu.com/p/496813890
 
 import { Chunk } from '../cacher/Cacher'
-import { createAVCC, nalusToAVCC, parseAVCC } from './264Parser'
+import { createAVCC, mergeNalus, naluToAVCC, parseAVCC } from './264Parser'
 import { AudioConfig, VideoConfig } from './Demuxer'
 
 const getMediaKind = (stream_type: number) => {
@@ -492,20 +492,20 @@ export class ParseTS {
     // 解析 PES Payload（H.264 NALU）
     pes_payload = payload.slice(currentOffset)
     {
-      const nalus = this.getNalus(pes_payload)
+      const naluItems = this.getNalus(pes_payload)
 
       // 获取 sps pps
       if (!this.videoConfig) {
         let sps, pps
         // sps
         {
-          const nalu = nalus.find((nalu) => nalu.type === 7)
-          sps = nalu?.data
+          const naluItem = naluItems.find((nalu) => nalu.type === 7)
+          sps = naluItem?.nalu.slice(4)
         }
         // pps
         {
-          const nalu = nalus.find((nalu) => nalu.type === 8)
-          pps = nalu?.data
+          const naluItem = naluItems.find((nalu) => nalu.type === 8)
+          pps = naluItem?.nalu.slice(4)
         }
         if (sps && pps) {
           const description = createAVCC(sps, pps)
@@ -515,39 +515,39 @@ export class ParseTS {
         }
       }
 
-      const nalus_data = []
+      const nalus = []
 
       let type: 'key' | 'delta' = 'delta'
-      for (const nalu of nalus) {
-        const { type: naluType, data } = nalu
+      for (const naluItem of naluItems) {
+        const { type: naluType, nalu } = naluItem
         switch (naluType) {
           case 9:
             {
-              // nalus_data.push(data)
+              nalus.push(nalu)
             }
             break
           case 1:
             {
               type = 'delta'
-              nalus_data.push(data)
+              nalus.push(nalu)
             }
             break
           case 5:
             {
               type = 'key'
-              nalus_data.push(data)
+              nalus.push(nalu)
             }
             break
         }
       }
 
-      const data = nalusToAVCC(nalus_data)
+      const data = mergeNalus(nalus)
 
       const { dts = 0, pts = 0 } = pes_header
 
       const cts = pts - dts
 
-      return { kind: 'video', type, dts, pts, cts, data, nalus: nalus_data, nalusa: nalus }
+      return { kind: 'video', type, dts, pts, cts, data, nalus }
     }
   }
 
@@ -603,11 +603,12 @@ export class ParseTS {
       }
 
       if (payloadLength !== 0) {
-        const naluData = payload.slice(startOffset, startOffset + payloadLength)
-        nalus.push({ type: naluType, data: naluData })
+        const _payload = payload.slice(startOffset, startOffset + payloadLength)
+
+        const nalu = naluToAVCC(_payload)
+        nalus.push({ type: naluType, nalu })
       }
     }
-
     return nalus
   }
 }
