@@ -1,14 +1,15 @@
 import { Render } from './Render'
 
 interface WorkerMessage {
-  action: 'init' | 'setSize' | 'setShader' | 'push' | 'setCut' | 'setPause' | 'destroy'
-  data: any
+  action: 'init' | 'setSize' | 'setShader' | 'setBaseTime' | 'push' | 'setCut' | 'setPause' | 'destroy'
+  data: unknown
 }
 
-const videoPlayer = new Render()
+const render = new Render()
 
 onmessage = (event: MessageEvent<WorkerMessage>) => {
   const { action, data } = event.data
-  const func = videoPlayer[action]
+  const func = render[action]
+  // @ts-ignore
   func && func(data)
 }

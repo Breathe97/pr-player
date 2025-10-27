@@ -3,43 +3,17 @@ import { DecoderWorker } from './decoder/DecoderWorker'
 import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
-import { PrFetch } from 'pr-fetch'
-import { ScriptTag, AudioTag, VideoTag } from './demuxer/type'
 import { Shader } from './render/type'
-
-const stopStream = (stream: MediaStream | undefined) => {
-  const tracks = stream?.getTracks() || []
-  for (const track of tracks) {
-    track.stop()
-  }
-}
-
-const createRender = (baseTime: number) => {
-  const worker = new RenderWorker()
-
-  const canvas = document.createElement('canvas')
-  const offscreenCanvas = canvas.transferControlToOffscreen()
-
-  // @ts-ignore
-  const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
-
-  const stream = new MediaStream([trackGenerator])
-
-  const destroy = () => {
-    worker.destroy()
-    stopStream(stream)
-  }
-
-  worker.init({ offscreenCanvas, baseTime, writable: trackGenerator.writable })
-
-  return { worker, canvas, stream, destroy }
-}
+import { getFormatFromUrlPattern, stopStream, createRender } from './tools'
+import { PrResolves } from './PrResolves'
+import { parseNalu } from './demuxer/264Parser'
+import { PrFetch } from './PrFetch'
 
 interface On {
   demuxer: {
-    script?: (_tag: ScriptTag) => void
-    audio?: (_tag: AudioTag) => void
-    video?: (_tag: VideoTag) => void
+    info?: (_info: any) => void
+    config?: (_config: any) => void
+    chunk?: (_chunk: any) => void
     sei?: (_payload: Uint8Array) => void
   }
   decoder: {
@@ -51,6 +25,9 @@ interface On {
 
 export class PrPlayer {
   private prFetch = new PrFetch()
+  private prResolves = new PrResolves()
+
+  private url: string = ''
 
   private demuxerWorker: DemuxerWorker | undefined
   private decoderWorker: DecoderWorker | undefined
@@ -59,7 +36,7 @@ export class PrPlayer {
 
   private renderWorker: RenderWorker | undefined
 
-  private renderBaseTime = 0
+  private renderBaseTime: number | undefined
 
   private stream: MediaStream | undefined
 
@@ -78,7 +55,6 @@ export class PrPlayer {
    * 初始化
    */
   init = () => {
-    this.initDemuxer()
     this.initDecoder()
     this.audioPlayer = new AudioPlayer()
     this.audioPlayer.init()
@@ -91,33 +67,25 @@ export class PrPlayer {
    */
   start = async (url: string) => {
     this.stop()
-    this.renderBaseTime = new Date().getTime()
+    this.url = url
     this.init()
-    return this.prFetch
-      .request(url)
-      .then(async (res) => {
-        const reader = res.body?.getReader()
-        if (!reader) throw new Error('Reader is error.')
 
-        const readFunc = () => {
-          reader
-            .read()
-            .then(({ done, value }) => {
-              if (value) {
-                this.demuxerWorker?.push(value)
-              }
-              if (done) return
-              readFunc()
-            })
-            .catch((err) => {
-              if (err.name !== 'AbortError') throw err
-            })
+    const pattern = getFormatFromUrlPattern(url)
+    if (pattern === 'unknown') throw new Error('This address cannot be parsed.')
+    this.initDemuxer(pattern)
+
+    switch (pattern) {
+      case 'flv':
+        {
+          this.flv.start()
         }
-        readFunc()
-      })
-      .catch((err) => {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: err`, err)
-      })
+        break
+      case 'hls':
+        {
+          this.hls.start()
+        }
+        break
+    }
   }
 
   /**
@@ -125,6 +93,7 @@ export class PrPlayer {
    */
   stop = async () => {
     try {
+      clearInterval(this.hls.getSegmentsTimer)
       this.prFetch.stop()
     } catch (error) {
       console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
@@ -138,80 +107,156 @@ export class PrPlayer {
       this.cut.remove(key)
     }
     this.audioPlayer?.destroy()
-    this.renderBaseTime = 0
+    this.renderBaseTime = undefined
+
     this.canvas = undefined
   }
 
+  getCanvas = () => this.canvas
+  getStream = () => this.stream
+
+  setPause = (pause: boolean) => {
+    this.renderWorker?.setPause(pause)
+  }
+
   /**
-   * 监听媒体 tag
+   * 设置渲染模式
    */
-  private onTag = (e: any) => {
-    if (!this.decoderWorker) return
-    const { header, body } = e
-    const { tagType, timestamp } = header
-    // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: ${tagType}`, e)
-    switch (tagType) {
-      case 'script':
-        {
-          const { width, height } = body
-          this.renderWorker?.setSize({ width, height })
-          this.on.demuxer.script && this.on.demuxer.script(e)
-        }
-        break
-      case 'audio':
-        {
-          const { accPacketType, data } = body
+  setShader = (shader: Shader[]) => {
+    this.renderWorker?.setShader(shader)
+  }
 
-          // 初始化解码器
-          if (accPacketType === 0) {
-            const { codec, sampleRate, channelConfiguration } = body
-            const config: AudioDecoderConfig = { codec, sampleRate, numberOfChannels: channelConfiguration, description: new Uint8Array([]) }
-            this.decoderWorker.audio.init(config)
-          }
-          // 解码
-          else if (accPacketType === 1) {
-            const type = 'key'
-            this.decoderWorker.audio.decode({ type, timestamp: timestamp * 1, data })
-          }
-          this.on.demuxer.audio && this.on.demuxer.audio(e)
-        }
-        break
-      case 'video':
-        {
-          const { avcPacketType, frameType, data, nalus = [] } = body
+  /**
+   * 是否静音 默认为true
+   * @param state?: boolean
+   */
+  setMute = (state?: boolean) => this.audioPlayer?.prAudioStream?.setMute(state)
 
-          // 初始化解码器
-          if (avcPacketType === 0) {
-            const { codec, data: description } = body
-            this.decoderWorker.video.init({ codec, description })
-          }
-          // 解码
-          else if (avcPacketType === 1) {
-            const type = frameType === 1 ? 'key' : 'delta'
-            this.decoderWorker.video.decode({ type, timestamp: timestamp * 1000, data })
+  /**
+   * 是否已准备好
+   */
+  isReady = () => {
+    const fun = () => this.stream?.active === true
+    return this.prResolves.add('isReady', fun)
+  }
 
-            for (const nalu of nalus) {
-              const { header, payload } = nalu
-              const { nal_unit_type } = header
-              // 解析SEI
-              if (nal_unit_type === 6) {
-                this.on.demuxer.sei && this.on.demuxer.sei(payload)
-              }
-            }
-          }
-          this.on.demuxer.video && this.on.demuxer.video(e)
-        }
-        break
+  cut = {
+    /**
+     * 创建剪切
+     */
+    create: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
+      let renderIns = this.cutRenders.get(key)
+      if (renderIns) {
+        renderIns.worker.setCut(cutOption)
+        renderIns.worker.setPause(false)
+        return renderIns
+      }
+
+      renderIns = createRender()
+      renderIns.worker.setBaseTime(this.renderBaseTime || 0)
+      renderIns.worker.setCut(cutOption)
+      this.cutRenders.set(key, renderIns)
+      return renderIns
+    },
+
+    getCanvas: (key: string) => this.cutRenders.get(key)?.canvas,
+    getStream: (key: string) => this.cutRenders.get(key)?.stream,
+
+    setPause: (key: string, pause: boolean) => {
+      this.cutRenders.get(key)?.worker.setPause(pause)
+    },
+    /**
+     * 设置渲染模式
+     */
+    setShader: (key: string, shader: Shader[]) => {
+      this.cutRenders.get(key)?.worker.setShader(shader)
+    },
+    /**
+     * 移除剪切
+     */
+    remove: (key: string) => {
+      this.cutRenders.get(key)?.destroy()
+      this.cutRenders.delete(key)
     }
   }
 
   /**
-   * 初始化分离器
+   * 初始化解复器
    */
-  private initDemuxer = () => {
+  private initDemuxer = (pattern: any) => {
     this.demuxerWorker = new DemuxerWorker()
-    this.demuxerWorker.init()
-    this.demuxerWorker.on.tag = this.onTag
+    this.demuxerWorker.init(pattern)
+
+    this.demuxerWorker.on.debug = (_debug) => {
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
+    }
+
+    this.demuxerWorker.on.info = (info) => {
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
+      this.on.demuxer.info && this.on.demuxer.info(info)
+    }
+
+    this.demuxerWorker.on.config = (config) => {
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
+      this.on.demuxer.config && this.on.demuxer.config(config)
+      const { kind } = config
+
+      switch (kind) {
+        case 'audio':
+          {
+            const { codec, sampleRate, numberOfChannels } = config
+            this.decoderWorker?.audio.init({ codec, sampleRate, numberOfChannels })
+          }
+          break
+        case 'video':
+          {
+            const { codec, description } = config
+            this.decoderWorker?.video.init({ codec, description })
+          }
+          break
+      }
+    }
+
+    this.demuxerWorker.on.chunk = (chunk) => {
+      this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+      if (!this.decoderWorker) return
+      const { kind } = chunk
+
+      switch (kind) {
+        case 'audio':
+          {
+            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+            const { type, dts, data } = chunk
+            const timestamp = dts * 1
+            this.decoderWorker.audio.decode({ type, timestamp, data })
+          }
+          break
+        case 'video':
+          {
+            const { type, dts, data, nalus = [] } = chunk
+            // 暂存开始时间 ms
+            if (this.renderBaseTime === undefined) {
+              const now = new Date().getTime()
+              this.renderBaseTime = now - dts // 设置渲染基准时间
+              this.renderWorker?.setBaseTime(this.renderBaseTime)
+            }
+
+            const timestamp = dts * 1000
+            this.decoderWorker.video.decode({ type, timestamp, data })
+            for (const nalu of nalus) {
+              if (nalu.byteLength <= 4) continue
+              const { header, data } = parseNalu(nalu)
+              const { nal_unit_type } = header
+              // 解析SEI
+              if (nal_unit_type === 6) {
+                this.on.demuxer.sei && this.on.demuxer.sei(data)
+              }
+            }
+          }
+          break
+      }
+    }
   }
 
   /**
@@ -247,7 +292,7 @@ export class PrPlayer {
    * 初始化渲染器
    */
   private initRender = () => {
-    const { worker, canvas, stream } = createRender(this.renderBaseTime)
+    const { worker, canvas, stream } = createRender()
 
     this.renderWorker = worker
 
@@ -258,62 +303,114 @@ export class PrPlayer {
     this.renderWorker.setPause(false)
   }
 
-  getCanvas = () => this.canvas
-  getStream = () => this.stream
-
-  setPause = (pause: boolean) => {
-    this.renderWorker?.setPause(pause)
-  }
-
-  /**
-   * 设置渲染模式
-   */
-  setShader = (shader: Shader[]) => {
-    this.renderWorker?.setShader(shader)
-  }
-
-  /**
-   * 是否静音 默认为true
-   * @param state?: boolean
-   */
-  setMute = (state?: boolean) => this.audioPlayer?.prAudioStream?.setMute(state)
-
-  cut = {
-    /**
-     * 创建剪切
-     */
-    create: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
-      let renderIns = this.cutRenders.get(key)
-      if (renderIns) {
-        renderIns.worker.setCut(cutOption)
-        renderIns.worker.setPause(false)
-        return renderIns
+  private flv = {
+    start: async () => {
+      try {
+        const res = await this.prFetch.request(this.url)
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('reader is error.')
+        while (true) {
+          const { done, value } = await reader.read()
+          if (value) {
+            this.demuxerWorker?.push(value)
+          }
+          if (done) break // 读取完成
+        }
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') throw Error(error)
       }
+    }
+  }
 
-      renderIns = createRender(this.renderBaseTime)
-      renderIns.worker.setCut(cutOption)
-      this.cutRenders.set(key, renderIns)
-      return renderIns
+  private hls = {
+    isLive: false,
+    urls: [] as string[],
+    url: '',
+    getSegmentsTimer: 0,
+    parse: async (value: AllowSharedBufferSource) => {
+      const textDecoder = new TextDecoder('utf-8') // 指定编码格式
+      const playlistText = textDecoder.decode(value)
+
+      const lines = playlistText.split('\n').map((item) => item.replace('\r', ''))
+
+      const baseUrl = this.url.substring(0, this.url.lastIndexOf('/') + 1)
+      let duration = 4 // 默认片段时长
+      let targetDuration = 0
+      let isLive = false
+      const segments = []
+
+      for (const line of lines) {
+        if (line.startsWith('#EXTINF:')) {
+          duration = parseFloat(line.split(':')[1].split(',')[0])
+        } else if (line.startsWith('#EXT-X-TARGETDURATION:')) {
+          targetDuration = parseInt(line.split(':')[1])
+        } else if (line.startsWith('#EXT-X-ENDLIST')) {
+          isLive = false // 点播流
+        } else if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) {
+          isLive = true // 直播流
+        } else if (line.includes('.ts') && !line.startsWith('#')) {
+          segments.push({
+            url: line.startsWith('http') ? line : baseUrl + line,
+            duration,
+            isLive
+          })
+        }
+      }
+      return { baseUrl, targetDuration, isLive, segments }
+    },
+    getSegments: async () => {
+      const prFetch = new PrFetch()
+      const res = await prFetch.request(this.url)
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('reader is error.')
+      while (true) {
+        const { done, value } = await reader.read()
+        if (value) {
+          const info = await this.hls.parse(value)
+          const { segments = [], isLive = false } = info
+          this.hls.isLive = isLive
+          let urls = Array.from(segments, (item: any) => item.url)
+          const index = urls.findIndex((url) => url === this.hls.url)
+          if (index !== -1) {
+            urls = urls.slice(index + 1)
+          }
+          this.hls.urls = urls
+        }
+        if (done) break // 读取完成
+      }
     },
 
-    getCanvas: (key: string) => this.cutRenders.get(key)?.canvas,
-    getStream: (key: string) => this.cutRenders.get(key)?.stream,
+    getData: async () => {},
+    start: async () => {
+      try {
+        await this.hls.getSegments()
+        this.hls.getSegmentsTimer = window.setInterval(this.hls.getSegments, 1000)
+        if (this.hls.isLive === false) {
+          clearInterval(this.hls.getSegmentsTimer)
+        }
 
-    setPause: (key: string, pause: boolean) => {
-      this.cutRenders.get(key)?.worker.setPause(pause)
-    },
-    /**
-     * 设置渲染模式
-     */
-    setShader: (key: string, shader: Shader[]) => {
-      this.cutRenders.get(key)?.worker.setShader(shader)
-    },
-    /**
-     * 移除剪切
-     */
-    remove: (key: string) => {
-      this.cutRenders.get(key)?.destroy()
-      this.cutRenders.delete(key)
+        while (true) {
+          const url = this.hls.urls.shift()
+          // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: url`, url?.slice(97 + 24))
+          if (url) {
+            this.hls.url = url
+            const res = await this.prFetch.request(url)
+            const reader = res.body?.getReader()
+            if (!reader) throw new Error('segment reader is error.')
+
+            while (true) {
+              const { done, value } = await reader.read()
+              if (value) {
+                this.demuxerWorker?.push(value)
+              }
+              if (done) break // 读取完成
+            }
+          }
+          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+        }
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') throw Error(error)
+      }
     }
   }
 }

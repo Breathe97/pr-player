@@ -73,8 +73,3 @@ export interface VideoTag {
     codec?: string
   }
 }
-
-export interface On {
-  header?: (_header: Header) => void
-  tag?: (_tag: ScriptTag | AudioTag | VideoTag) => void
-}

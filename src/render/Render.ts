@@ -21,13 +21,18 @@ export class Render {
 
   constructor() {}
 
-  init = ({ offscreenCanvas, baseTime = performance.timeOrigin, writable }: { offscreenCanvas: OffscreenCanvas; baseTime?: number; writable: any }) => {
+  init = ({ offscreenCanvas, writable }: { offscreenCanvas: OffscreenCanvas; writable: any }) => {
     this.destroy()
     this.offscreenCanvas = offscreenCanvas
     this.writable = writable
     this.writer = this.writable.getWriter()
-
     this.ctx = this.offscreenCanvas.getContext('2d')
+  }
+
+  /**
+   * 设置渲染基准时间
+   */
+  setBaseTime = (baseTime: number) => {
     this.baseTime = baseTime
   }
 
@@ -91,6 +96,7 @@ export class Render {
 
     while (true) {
       const frame = this.pendingFrames.shift()
+
       if (!frame) break
 
       let { timestamp, bitmap } = frame
@@ -102,6 +108,7 @@ export class Render {
       }
 
       const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: timeUntilNextFrame`, timeUntilNextFrame, timestamp)
       await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
       this.drawImage({ timestamp, bitmap })
 
