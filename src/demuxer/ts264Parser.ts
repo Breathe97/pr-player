@@ -125,6 +125,7 @@ export class ParseTS {
     let payloadLength = 188 - 4
 
     // 解析自适应字段(如果存在)
+    // @ts-ignore
     let adaptationField
 
     // (8b) 表示 AdaptationField的总字节数（不包括本字段）。如果为 0，则仅填充字节（0xFF）存在。
@@ -458,7 +459,7 @@ export class ParseTS {
 
       if (optional_header_exist) {
         // 读取 PES 头部标志位
-        const flags1 = view.getUint8(currentOffset)
+        // const flags1 = view.getUint8(currentOffset)
         currentOffset += 1
 
         const flags2 = view.getUint8(currentOffset)

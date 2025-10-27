@@ -187,7 +187,7 @@ export class PrPlayer {
     this.demuxerWorker = new DemuxerWorker()
     this.demuxerWorker.init(pattern)
 
-    this.demuxerWorker.on.debug = (debug) => {
+    this.demuxerWorker.on.debug = (_debug) => {
       // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
     }
 
