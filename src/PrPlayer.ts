@@ -7,7 +7,7 @@ import { Shader } from './render/type'
 import { getFormatFromUrlPattern, stopStream, createRender } from './tools'
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/264Parser'
-import { PrFetch } from './PrFetch'
+import { PrFetch } from 'pr-fetch'
 
 interface On {
   demuxer: {
