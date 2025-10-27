@@ -23,7 +23,15 @@ interface On {
   error?: (_e: any) => void
 }
 
+interface PrPlayerOption {
+  debug?: boolean
+}
+
 export class PrPlayer {
+  private option: PrPlayerOption = {
+    debug: false
+  }
+
   private prFetch = new PrFetch()
   private prResolves = new PrResolves()
 
@@ -49,7 +57,10 @@ export class PrPlayer {
   // @ts-ignore
   trackGenerator: MediaStreamTrackGenerator
 
-  constructor() {}
+  constructor(option: PrPlayerOption = {}) {
+    const { debug = false } = option
+    this.option.debug = debug
+  }
 
   /**
    * 初始化
@@ -96,7 +107,7 @@ export class PrPlayer {
       clearInterval(this.hls.getSegmentsTimer)
       this.prFetch.stop()
     } catch (error) {
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: error`, error)
     }
     this.demuxerWorker?.destroy()
     this.decoderWorker?.destroy()
@@ -187,17 +198,23 @@ export class PrPlayer {
     this.demuxerWorker = new DemuxerWorker()
     this.demuxerWorker.init(pattern)
 
-    this.demuxerWorker.on.debug = (_debug) => {
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: debug`, debug)
+    this.demuxerWorker.on.debug = (debug) => {
+      if (this.option.debug) {
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: debug`, debug)
+      }
     }
 
     this.demuxerWorker.on.info = (info) => {
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
+      if (this.option.debug) {
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: info`, info)
+      }
       this.on.demuxer.info && this.on.demuxer.info(info)
     }
 
     this.demuxerWorker.on.config = (config) => {
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
+      if (this.option.debug) {
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: config`, config)
+      }
       this.on.demuxer.config && this.on.demuxer.config(config)
       const { kind } = config
 
@@ -219,14 +236,14 @@ export class PrPlayer {
 
     this.demuxerWorker.on.chunk = (chunk) => {
       this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
 
       switch (kind) {
         case 'audio':
           {
-            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
             const { type, dts, data } = chunk
             const timestamp = dts * 1
             this.decoderWorker.audio.decode({ type, timestamp, data })
@@ -234,7 +251,7 @@ export class PrPlayer {
           break
         case 'video':
           {
-            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
             const { type, dts, data, nalus = [] } = chunk
             // 暂存开始时间 ms
             if (this.renderBaseTime === undefined) {
@@ -392,7 +409,7 @@ export class PrPlayer {
 
         while (true) {
           const url = this.hls.urls.shift()
-          // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: url`, url?.slice(97 + 24))
+          // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: url`, url?.slice(97 + 24))
           if (url) {
             this.hls.url = url
             const res = await this.prFetch.request(url)

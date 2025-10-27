@@ -169,8 +169,8 @@ export class ParseTS {
             switch (streamInfo.kind) {
               case 'audio':
                 {
-                  // const chunk = (await this.parseVideo(payload)) as any
-                  // this.on.chunk && this.on.chunk({ ...chunk, kind: 'audio' })
+                  const chunk = await this.parseAudio(payload)
+                  this.on.chunk && this.on.chunk(chunk as any)
                 }
                 break
               case 'video':
@@ -424,6 +424,106 @@ export class ParseTS {
     return { discontinuity_indicator, random_access_indicator, elementary_stream_priority_indicator, pcr_flag, opcr_flag, splicing_point_flag, transport_private_data_flag, adaptation_field_extension_flag, pcr, opcr, splice_countdown, transport_private_data }
   }
 
+  private parseAudio = async (payload: Uint8Array) => {
+    const view = new DataView(payload.buffer)
+    let currentOffset = 0
+
+    let pes_header, pes_payload
+    {
+      // 固定为 0x000001
+      const is_packet_start_code_prefix = view.getUint8(currentOffset) === 0x00 && view.getUint8(currentOffset + 1) === 0x00 && view.getUint8(currentOffset + 2) === 0x01
+      currentOffset += 3
+      if (!is_packet_start_code_prefix) {
+        throw new Error('invalid ts audio payload.')
+      }
+
+      // 标识流类型（如 0xE0= 视频，0xC0= 音频）
+      const stream_id = view.getUint8(currentOffset)
+      currentOffset += 1
+
+      // PES 包长度（0 = 可变长度，如视频）
+      const pes_packet_length = (view.getUint8(currentOffset) << 8) | view.getUint8(currentOffset + 1)
+      currentOffset += 2
+
+      // 解析 Optional PES Header
+      let scrambling_control, priority, data_alignment, copyright, original_copy
+      {
+        const flags1 = view.getUint8(currentOffset)
+        currentOffset += 1
+
+        scrambling_control = (flags1 >> 4) & 0x03
+        priority = ((flags1 >> 3) & 0x01) === 1
+        data_alignment = ((flags1 >> 2) & 0x01) === 1
+        copyright = ((flags1 >> 1) & 0x01) === 1
+        original_copy = (flags1 & 0x01) === 1
+      }
+
+      let pts, dts
+      {
+        const flags2 = view.getUint8(currentOffset)
+        currentOffset += 1
+
+        // 解析 PTS/DTS 标志位
+        const pts_dts_flags = flags2 >> 6
+
+        // 读取 PES Header Data Length（后续可选数据的长度）
+        const pes_header_data_length = view.getUint8(currentOffset)
+        currentOffset += 1
+        // 解析 pts
+        if ((pts_dts_flags & 0x02) === 0x02) {
+          pts = this.parsePtsDts(view, currentOffset)
+        }
+        // 解析 dts
+        if ((pts_dts_flags & 0x01) === 0x01) {
+          dts = this.parsePtsDts(view, currentOffset + 5)
+        } else {
+          dts = pts
+        }
+        currentOffset += pes_header_data_length
+      }
+
+      pes_header = { stream_id, pes_packet_length, scrambling_control, priority, data_alignment, copyright, original_copy, pts, dts }
+    }
+
+    // 解析 PES Payload
+    pes_payload = payload.slice(currentOffset)
+
+    {
+      if (!this.audioConfig) {
+        const num = view.getUint8(currentOffset)
+        currentOffset += 1
+        if (num === 255) {
+          const num = view.getUint8(currentOffset)
+          const num_1 = view.getUint8(currentOffset + 1)
+
+          const samplingFrequencyIndex = (num_1 >> 2) & 0x03 // 采样率索引
+
+          const audioObjectType = ((num & 0xf8) >> 3) & 0x03
+          const channelMode = (num_1 >> 6) & 0x03
+
+          // 采样率对照表
+          const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
+
+          const sampleRate = sampleRates[samplingFrequencyIndex]
+
+          const codec = `mp4a.40.${audioObjectType}`
+
+          const numberOfChannels = channelMode === 3 ? 1 : 2
+
+          this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels }
+          this.on.config && this.on.config(this.audioConfig)
+        }
+      }
+      const { dts = 0, pts = 0 } = pes_header
+
+      const cts = pts - dts
+
+      const data = pes_payload.slice(7)
+
+      return { kind: 'audio', type: 'key', dts, pts, cts, data, pes_payload }
+    }
+  }
+
   private parseVideo = async (payload: Uint8Array) => {
     const view = new DataView(payload.buffer)
     let currentOffset = 0
@@ -445,23 +545,21 @@ export class ParseTS {
       const pes_packet_length = (view.getUint8(currentOffset) << 8) | view.getUint8(currentOffset + 1)
       currentOffset += 2
 
-      // 解析 Optional PES Header（如果存在）
-      let pts: number | undefined, dts: number | undefined
-
-      const optional_header_exist =
-        stream_id !== 0xbc && // program_stream_map
-        stream_id !== 0xbe && // padding_stream
-        stream_id !== 0xbf && // private_stream_2
-        stream_id !== 0xf0 && // ECM
-        stream_id !== 0xf1 && // EMM
-        stream_id !== 0xff && // program_stream_directory
-        stream_id !== 0xf2 // DSMCC_stream
-
-      if (optional_header_exist) {
-        // 读取 PES 头部标志位
-        // const flags1 = view.getUint8(currentOffset)
+      // 解析 Optional PES Header
+      let scrambling_control, priority, data_alignment, copyright, original_copy
+      {
+        const flags1 = view.getUint8(currentOffset)
         currentOffset += 1
 
+        scrambling_control = (flags1 >> 4) & 0x03
+        priority = ((flags1 >> 3) & 0x01) === 1
+        data_alignment = ((flags1 >> 2) & 0x01) === 1
+        copyright = ((flags1 >> 1) & 0x01) === 1
+        original_copy = (flags1 & 0x01) === 1
+      }
+
+      let pts, dts
+      {
         const flags2 = view.getUint8(currentOffset)
         currentOffset += 1
 
@@ -474,19 +572,17 @@ export class ParseTS {
         // 解析 pts
         if ((pts_dts_flags & 0x02) === 0x02) {
           pts = this.parsePtsDts(view, currentOffset)
-          currentOffset += 5
         }
         // 解析 dts
         if ((pts_dts_flags & 0x01) === 0x01) {
-          dts = this.parsePtsDts(view, currentOffset)
-          currentOffset += 5
+          dts = this.parsePtsDts(view, currentOffset + 5)
         } else {
           dts = pts
         }
-
-        currentOffset += pes_header_data_length - (currentOffset - 9)
+        currentOffset += pes_header_data_length
       }
-      pes_header = { stream_id, pes_packet_length, pts, dts, optional_header_exist }
+
+      pes_header = { stream_id, pes_packet_length, scrambling_control, priority, data_alignment, copyright, original_copy, pts, dts }
     }
 
     // 解析 PES Payload（H.264 NALU）

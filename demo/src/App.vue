@@ -62,7 +62,7 @@ init()
 
 const info = ref()
 
-const player = new PrPlayer()
+const player = new PrPlayer({ debug: true })
 
 player.on.demuxer.info = (e) => {
   info.value = e
