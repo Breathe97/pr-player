@@ -41,9 +41,9 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-live', value: 'https://stream.quickvo.live/stream_8904232701/1761442770140.flv?auth_key=1761529170-0-0-68c53167683805b0aa82189d25f7431c' },
+  { label: 'flv-live', value: 'https://stream.quickvo.live/stream_6307965365/1761545732852.flv?auth_key=1761632132-0-0-6107061934949430806937600ccea076' },
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://stream.quickvo.live/stream_8904232701/1761442770140.m3u8?auth_key=1761529170-0-0-8378b9da6faa9d82f5b74bbbaa90f969' }
+  { label: 'hls-live', value: 'https://stream.quickvo.live/stream_6307965365/1761545732852.m3u8?auth_key=1761632132-0-0-bcbce4d307ba6500fab26be658362475' }
 ]
 
 const url_type = ref<'flv' | 'hls'>('flv')

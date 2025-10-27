@@ -236,7 +236,7 @@ export class PrPlayer {
 
     this.demuxerWorker.on.chunk = (chunk) => {
       this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
 
@@ -287,7 +287,8 @@ export class PrPlayer {
       this.on.decoder.audio && this.on.decoder.audio(audioData)
     }
     this.decoderWorker.on.audio.error = (e) => {
-      this.stop()
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: e`, e);
+      // this.stop()
       this.on.error && this.on.error(e)
     }
 

@@ -496,15 +496,16 @@ export class ParseTS {
           const num = view.getUint8(currentOffset)
           const num_1 = view.getUint8(currentOffset + 1)
 
-          const samplingFrequencyIndex = (num_1 >> 2) & 0x03 // 采样率索引
+          // const samplingFrequencyIndex = (num_1 >> 2) & 0x03 // 采样率索引
 
           const audioObjectType = ((num & 0xf8) >> 3) & 0x03
           const channelMode = (num_1 >> 6) & 0x03
 
           // 采样率对照表
-          const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
+          // const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
 
-          const sampleRate = sampleRates[samplingFrequencyIndex]
+          // const sampleRate = sampleRates[samplingFrequencyIndex]
+          const sampleRate = 48000
 
           const codec = `mp4a.40.${audioObjectType}`
 
@@ -520,7 +521,7 @@ export class ParseTS {
 
       const data = pes_payload.slice(7)
 
-      return { kind: 'audio', type: 'key', dts, pts, cts, data, pes_payload }
+      return { kind: 'audio', type: 'key', dts, pts, cts, data }
     }
   }
 
