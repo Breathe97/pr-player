@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div style="font-size: 30px; line-height: 80px; padding-top: 40px">WebCodecsPlayer</div>
+    <div style="font-size: 30px; line-height: 80px; padding-top: 40px">Pr-Player</div>
     <div style="margin: 8px 0; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap">
       <el-input style="width: 320px" v-model="url" placeholder="Please input" class="input-with-select">
         <template #prepend>
