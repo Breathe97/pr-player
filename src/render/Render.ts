@@ -1,5 +1,11 @@
 import type { CutOption, Shader } from './type'
 
+export interface RenderOption {
+  shader?: Shader[]
+  frame_track?: boolean
+  base_time?: number
+}
+
 export class Render {
   private isRendering = false
   private pendingFrames: { timestamp: number; bitmap: ImageBitmap }[] = []
@@ -13,11 +19,13 @@ export class Render {
 
   private cutOption: CutOption | undefined
 
-  private baseTime = 0
-
   private pause = false
 
-  private shader: Shader[] = ['stream']
+  private option = {
+    shader: ['stream'],
+    frame_track: false,
+    base_time: 0
+  }
 
   constructor() {}
 
@@ -31,17 +39,14 @@ export class Render {
   }
 
   /**
-   * 设置渲染基准时间
+   * 设置参数
    */
-  setBaseTime = (baseTime: number) => {
-    this.baseTime = baseTime
-  }
-
-  /**
-   * 设置渲染模式
-   */
-  setShader = (shader: Shader[]) => {
-    this.shader = shader
+  setOption = (option: RenderOption) => {
+    const option_keys = Object.keys(option) as (keyof typeof option)[]
+    for (const key of option_keys) {
+      // @ts-ignore
+      this.option[key] = option[key]
+    }
   }
 
   /**
@@ -58,7 +63,8 @@ export class Render {
     this.pendingFrames = []
     this.offscreenCanvas = undefined
     this.ctx = undefined
-    this.baseTime = 0
+    this.pause = false
+    this.option = { shader: ['stream'], frame_track: false, base_time: 0 }
   }
 
   push = (frame: { timestamp: number; bitmap: ImageBitmap }) => {
@@ -83,8 +89,9 @@ export class Render {
   }
 
   private calculateTimeUntilNextFrame = (timestamp: number) => {
+    const { base_time = 0 } = this.option
     const currentTime = performance.timeOrigin + performance.now()
-    const renderTime = this.baseTime + timestamp / 1000
+    const renderTime = base_time + timestamp / 1000
     const waitTime = renderTime - currentTime
     return Math.max(0, waitTime)
   }
@@ -92,9 +99,13 @@ export class Render {
   private renderFrame = async () => {
     const frame = this.pendingFrames.shift()
     if (!frame) return requestAnimationFrame(this.renderFrame)
-    const length = this.pendingFrames.length
-    if (length >= 50) {
-      this.baseTime -= Math.min(10, length / 10) // 追帧
+
+    // 是否开启追帧
+    if (this.option.frame_track) {
+      const length = this.pendingFrames.length
+      if (length >= 50) {
+        this.option.base_time -= Math.min(10, length / 10) // 追帧
+      }
     }
 
     let { timestamp, bitmap } = frame
@@ -115,12 +126,12 @@ export class Render {
 
   private drawImage = (frame: { timestamp: number; bitmap: ImageBitmap }) => {
     if (this.pause === true) return
-    if (this.shader.includes('stream')) {
+    if (this.option.shader.includes('stream')) {
       const videoFrame = new VideoFrame(frame.bitmap, { timestamp: frame.timestamp })
       this.writer.write(videoFrame)
       videoFrame.close()
     }
-    if (this.shader.includes('canvas')) {
+    if (this.option.shader.includes('canvas')) {
       if (this.ctx && this.offscreenCanvas) {
         this.ctx.drawImage(frame.bitmap, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height)
       }

@@ -25,11 +25,13 @@ interface On {
 
 interface PrPlayerOption {
   debug?: boolean
+  frame_track?: boolean
 }
 
 export class PrPlayer {
   private option: PrPlayerOption = {
-    debug: false
+    debug: false,
+    frame_track: true
   }
 
   private prFetch = new PrFetch()
@@ -134,7 +136,7 @@ export class PrPlayer {
    * 设置渲染模式
    */
   setShader = (shader: Shader[]) => {
-    this.renderWorker?.setShader(shader)
+    this.renderWorker?.setOption({ shader })
   }
 
   /**
@@ -142,6 +144,18 @@ export class PrPlayer {
    * @param state?: boolean
    */
   setMute = (state?: boolean) => this.audioPlayer?.prAudioStream?.setMute(state)
+
+  /**
+   * 是否开启追帧
+   * @param frame_track?: boolean
+   */
+  setFrameTrack = (frame_track: boolean) => {
+    this.renderWorker?.setOption({ frame_track })
+    const keys = [...this.cutRenders.keys()]
+    for (const key of keys) {
+      this.cutRenders.get(key)?.worker.setOption({ frame_track })
+    }
+  }
 
   /**
    * 是否已准备好
@@ -164,7 +178,7 @@ export class PrPlayer {
       }
 
       renderIns = createRender()
-      renderIns.worker.setBaseTime(this.renderBaseTime || 0)
+      renderIns.worker.setOption({ base_time: this.renderBaseTime, frame_track: this.option.frame_track })
       renderIns.worker.setCut(cutOption)
       this.cutRenders.set(key, renderIns)
       return renderIns
@@ -180,7 +194,7 @@ export class PrPlayer {
      * 设置渲染模式
      */
     setShader: (key: string, shader: Shader[]) => {
-      this.cutRenders.get(key)?.worker.setShader(shader)
+      this.cutRenders.get(key)?.worker.setOption({ shader })
     },
     /**
      * 移除剪切
@@ -254,7 +268,7 @@ export class PrPlayer {
             if (this.renderBaseTime === undefined) {
               const now = new Date().getTime()
               this.renderBaseTime = now - dts // 设置渲染基准时间
-              this.renderWorker?.setBaseTime(this.renderBaseTime)
+              this.renderWorker?.setOption({ base_time: this.renderBaseTime })
             }
 
             const timestamp = dts * 1000
@@ -293,10 +307,10 @@ export class PrPlayer {
 
     this.decoderWorker.on.video.decode = async (frame) => {
       this.renderWorker?.push(frame)
-      // const keys = [...this.cutRenders.keys()]
-      // for (const key of keys) {
-      //   this.cutRenders.get(key)?.worker.push(frame)
-      // }
+      const keys = [...this.cutRenders.keys()]
+      for (const key of keys) {
+        this.cutRenders.get(key)?.worker.push(frame)
+      }
       this.on.decoder.video && this.on.decoder.video(frame)
       frame.bitmap.close()
     }
@@ -317,6 +331,8 @@ export class PrPlayer {
     this.canvas = canvas
 
     this.stream = stream
+
+    this.renderWorker.setOption({ frame_track: this.option.frame_track })
 
     this.renderWorker.setPause(false)
   }
@@ -387,6 +403,11 @@ export class PrPlayer {
           const info = await this.hls.parse(value)
           const { segments = [], isLive = false } = info
           this.hls.isLive = isLive
+          // 非在线视频强制关闭追帧
+          if (isLive === false) {
+            this.option.frame_track = false
+            this.renderWorker?.setOption({ frame_track: false })
+          }
           let urls = Array.from(segments, (item: any) => item.url)
           const index = urls.findIndex((url) => url === this.hls.url)
           if (index !== -1) {
