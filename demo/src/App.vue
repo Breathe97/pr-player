@@ -35,15 +35,16 @@
 </template>
 <script setup lang="ts">
 import { ref } from 'vue'
-import { PrPlayer } from 'pr-player'
+// import { PrPlayer } from 'pr-player'
 // import { PrPlayer } from '../../dist/index'
-// import { PrPlayer } from '../../src/index'
+import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-live', value: 'https://stream.quickvo.live/stream_d88ab189-6316-41b2-9b44-fdd41d534967/1761636432807.flv?auth_key=1761722832-0-0-5525e8e71a792f4f367a616ff5b8b2b7' },
+  { label: 'flv-live', value: 'https://stream.quickvo.live/stream_6813719283/1761650867982.flv?auth_key=1761737267-0-0-df9d87646a825a445b3323cda864f794' },
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://stream.quickvo.live/stream_d88ab189-6316-41b2-9b44-fdd41d534967/1761636432807.m3u8?auth_key=1761722832-0-0-9e041f61a46bfb30ea622eb8d41ddcfa' }
+  { label: 'hls-live', value: 'https://stream.quickvo.live/stream_6813719283/1761650867982.m3u8?auth_key=1761737267-0-0-17c5c1770da40cc04a97291202c4122c' },
+  { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
 const url_type = ref<'flv' | 'hls'>('flv')
@@ -69,11 +70,11 @@ player.on.demuxer.info = (e) => {
 }
 
 player.on.demuxer.chunk = (e) => {
-  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, e)
+  // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, e)
 }
 
 player.on.demuxer.sei = (e) => {
-  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, e)
+  // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, e)
 }
 
 const pause = ref(false)

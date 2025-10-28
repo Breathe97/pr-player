@@ -27,6 +27,7 @@ export class Render {
     this.writable = writable
     this.writer = this.writable.getWriter()
     this.ctx = this.offscreenCanvas.getContext('2d')
+    this.renderFrame()
   }
 
   /**
@@ -62,9 +63,6 @@ export class Render {
 
   push = (frame: { timestamp: number; bitmap: ImageBitmap }) => {
     this.pendingFrames.push(frame)
-    if (this.isRendering === false) {
-      setTimeout(this.renderFrame, 0)
-    }
   }
 
   /**
@@ -92,30 +90,27 @@ export class Render {
   }
 
   private renderFrame = async () => {
-    this.isRendering = true
-
-    while (true) {
-      const frame = this.pendingFrames.shift()
-
-      if (!frame) break
-
-      let { timestamp, bitmap } = frame
-
-      // 剪切渲染
-      if (this.cutOption) {
-        const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = this.cutOption
-        bitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
-      }
-
-      const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: timeUntilNextFrame`, timeUntilNextFrame, timestamp)
-      await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
-      this.drawImage({ timestamp, bitmap })
-
-      this.cutOption && bitmap.close() // 剪切需要创建新的 ImageBitmap 才需要关闭
+    const frame = this.pendingFrames.shift()
+    if (!frame) return requestAnimationFrame(this.renderFrame)
+    const length = this.pendingFrames.length
+    if (length >= 50) {
+      this.baseTime -= Math.min(10, length / 10) // 追帧
     }
 
-    this.isRendering = false
+    let { timestamp, bitmap } = frame
+
+    // 剪切渲染
+    if (this.cutOption) {
+      const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = this.cutOption
+      bitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
+    }
+
+    const timeUntilNextFrame = this.calculateTimeUntilNextFrame(timestamp)
+    await new Promise((resolve) => setTimeout(() => resolve(true), timeUntilNextFrame))
+    this.drawImage({ timestamp, bitmap })
+
+    this.cutOption && bitmap.close() // 剪切需要创建新的 ImageBitmap 才需要关闭
+    requestAnimationFrame(this.renderFrame)
   }
 
   private drawImage = (frame: { timestamp: number; bitmap: ImageBitmap }) => {

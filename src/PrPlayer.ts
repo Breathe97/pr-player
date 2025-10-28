@@ -293,10 +293,10 @@ export class PrPlayer {
 
     this.decoderWorker.on.video.decode = async (frame) => {
       this.renderWorker?.push(frame)
-      const keys = [...this.cutRenders.keys()]
-      for (const key of keys) {
-        this.cutRenders.get(key)?.worker.push(frame)
-      }
+      // const keys = [...this.cutRenders.keys()]
+      // for (const key of keys) {
+      //   this.cutRenders.get(key)?.worker.push(frame)
+      // }
       this.on.decoder.video && this.on.decoder.video(frame)
       frame.bitmap.close()
     }
@@ -398,7 +398,6 @@ export class PrPlayer {
       }
     },
 
-    getData: async () => {},
     start: async () => {
       try {
         await this.hls.getSegments()
@@ -409,7 +408,6 @@ export class PrPlayer {
 
         while (true) {
           const url = this.hls.urls.shift()
-          // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: url`, url?.slice(97 + 24))
           if (url) {
             this.hls.url = url
             const res = await this.prFetch.request(url)
@@ -423,8 +421,9 @@ export class PrPlayer {
               }
               if (done) break // 读取完成
             }
+          } else {
+            await new Promise((resolve) => setTimeout(() => resolve(true), 500))
           }
-          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
         }
       } catch (error: any) {
         if (error?.name !== 'AbortError') throw Error(error)

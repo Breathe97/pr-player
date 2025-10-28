@@ -177,7 +177,7 @@ export class ParseTS {
                 {
                   const chunk = await this.parseVideo(payload)
                   this.on.chunk && this.on.chunk(chunk as any)
-                  await new Promise((resolve) => setTimeout(() => resolve(true), 8))
+                  await new Promise((resolve) => setTimeout(() => resolve(true), 0))
                 }
                 break
             }
