@@ -69,11 +69,11 @@ player.on.demuxer.info = (e) => {
   info.value = e
 }
 
-player.on.demuxer.chunk = (e) => {
+player.on.demuxer.chunk = (_e) => {
   // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, e)
 }
 
-player.on.demuxer.sei = (e) => {
+player.on.demuxer.sei = (_e) => {
   // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, e)
 }
 

@@ -1,4 +1,4 @@
-import { CutOption, Shader } from './type'
+import type { CutOption, Shader } from './type'
 
 export class Render {
   private isRendering = false

@@ -1,4 +1,4 @@
-import { On } from './type'
+import type { On } from './type'
 
 export class Decoder {
   private audioDecoderConfig?: AudioDecoderConfig
@@ -59,7 +59,7 @@ export class Decoder {
           }
         },
         error: (e) => {
-          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: e`, e);
+          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: e`, e)
           this.on.video.error && this.on.video.error(e)
         }
       })

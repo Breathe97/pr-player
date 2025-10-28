@@ -1,8 +1,8 @@
 // 参考 https://zhuanlan.zhihu.com/p/496813890
 
-import { Chunk } from '../cacher/Cacher'
+import type { Chunk } from '../cacher/Cacher'
 import { createAVCC, mergeNalus, naluToAVCC, parseAVCC } from './264Parser'
-import { AudioConfig, VideoConfig } from './Demuxer'
+import type { AudioConfig, VideoConfig } from './Demuxer'
 
 const getMediaKind = (stream_type: number) => {
   // ​​视频流​​：0x01（MPEG-1）、0x02（MPEG-2）、0x1B（H.264）、0x24（HEVC）。
