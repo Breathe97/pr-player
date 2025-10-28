@@ -34,10 +34,10 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
-// import { PrPlayer } from 'pr-player'
+import { ref } from 'vue'
+import { PrPlayer } from 'pr-player'
 // import { PrPlayer } from '../../dist/index'
-import { PrPlayer } from '../../src/index'
+// import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
