@@ -264,18 +264,16 @@ export class ParseFLV {
     currentOffset = currentOffset + 1
 
     // [2,dataSize]字节
-    const payloadSize = dataSize - 2
+    const payloadSize = dataSize
     const data = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadSize))
-
     // aac
     if (soundFormat === 10) {
       if (accPacketType === 0) {
         const num = view.getUint8(currentOffset)
         const num_1 = view.getUint8(currentOffset + 1)
-
-        const audioObjectType = (num & 0xf8) >> 3
+        const audioObjectType = (num >> 3) & 0x1f
         const samplingFrequencyIndex = ((num & 0x07) << 1) | (num_1 >> 7)
-        const channelConfiguration = (num_1 & 0x78) >> 3
+        const channelConfiguration = (num_1 >> 3) & 0x0f
 
         // 采样率对照表
         const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
@@ -284,7 +282,7 @@ export class ParseFLV {
 
         const sampleRate = sampleRates[samplingFrequencyIndex]
 
-        return { soundFormat, soundRate, soundSize, soundType, accPacketType, data, audioObjectType, samplingFrequencyIndex, channelConfiguration, codec, sampleRate }
+        return { soundFormat, soundRate, soundSize, soundType, accPacketType, data, samplingFrequencyIndex, channelConfiguration, codec, sampleRate }
       }
     }
 

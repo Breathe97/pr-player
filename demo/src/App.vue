@@ -41,9 +41,9 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-live', value: 'https://stream.quickvo.live/stream_6307965365/1761545732852.flv?auth_key=1761632132-0-0-6107061934949430806937600ccea076' },
+  { label: 'flv-live', value: 'https://stream.quickvo.live/stream_d88ab189-6316-41b2-9b44-fdd41d534967/1761636432807.flv?auth_key=1761722832-0-0-5525e8e71a792f4f367a616ff5b8b2b7' },
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://stream.quickvo.live/stream_6307965365/1761545732852.m3u8?auth_key=1761632132-0-0-bcbce4d307ba6500fab26be658362475' }
+  { label: 'hls-live', value: 'https://stream.quickvo.live/stream_d88ab189-6316-41b2-9b44-fdd41d534967/1761636432807.m3u8?auth_key=1761722832-0-0-9e041f61a46bfb30ea622eb8d41ddcfa' }
 ]
 
 const url_type = ref<'flv' | 'hls'>('flv')
@@ -66,6 +66,14 @@ const player = new PrPlayer({ debug: true })
 
 player.on.demuxer.info = (e) => {
   info.value = e
+}
+
+player.on.demuxer.chunk = (e) => {
+  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, e)
+}
+
+player.on.demuxer.sei = (e) => {
+  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, e)
 }
 
 const pause = ref(false)

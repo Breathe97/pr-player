@@ -242,7 +242,6 @@ export class PrPlayer {
       switch (kind) {
         case 'audio':
           {
-            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
             const { type, dts, data } = chunk
             const timestamp = dts * 1
             this.decoderWorker.audio.decode({ type, timestamp, data })
@@ -250,7 +249,6 @@ export class PrPlayer {
           break
         case 'video':
           {
-            // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: chunk`, chunk)
             const { type, dts, data, nalus = [] } = chunk
             // 暂存开始时间 ms
             if (this.renderBaseTime === undefined) {
@@ -286,7 +284,9 @@ export class PrPlayer {
       this.on.decoder.audio && this.on.decoder.audio(audioData)
     }
     this.decoderWorker.on.audio.error = (e) => {
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: e`, e)
+      if (this.option.debug) {
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: audio.error `, e)
+      }
       // this.stop()
       this.on.error && this.on.error(e)
     }

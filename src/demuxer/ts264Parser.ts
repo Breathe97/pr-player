@@ -491,27 +491,39 @@ export class ParseTS {
     {
       if (!this.audioConfig) {
         const num = view.getUint8(currentOffset)
-        currentOffset += 1
         if (num === 255) {
-          const num = view.getUint8(currentOffset)
-          const num_1 = view.getUint8(currentOffset + 1)
+          // const num_1 = view.getUint8(currentOffset + 1)
+          const num_2 = view.getUint8(currentOffset + 2)
+          const num_3 = view.getUint8(currentOffset + 3)
+          // const num_4 = view.getUint8(currentOffset + 4)
+          // const num_5 = view.getUint8(currentOffset + 5)
+          // const num_6 = view.getUint8(currentOffset + 6)
 
-          // const samplingFrequencyIndex = (num_1 >> 2) & 0x03 // 采样率索引
+          let channelConfiguration, samplingFrequencyIndex
+          // let mpegVersion, layer, protectionAbsent, profile, privateBit, frameLength, bufferFullness, numberOfRawDataBlocks
 
-          const audioObjectType = ((num & 0xf8) >> 3) & 0x03
-          const channelMode = (num_1 >> 6) & 0x03
+          // mpegVersion = (num_1 >> 3) & 0x01
+          // layer = (num_1 >> 1) & 0x03
+          // protectionAbsent = num_1 & 0x01
+          // profile = (num_2 >> 6) & 0x03
+
+          samplingFrequencyIndex = (num_2 >> 2) & 0x0f
+
+          // privateBit = (num_2 >> 1) & 0x01
+
+          channelConfiguration = ((num_2 & 0x01) << 2) | (num_3 >> 6)
+
+          // frameLength = ((num_3 & 0x03) << 11) | (num_4 << 3) | (num_5 >> 5)
+          // bufferFullness = ((num_5 & 0x1f) << 6) | (num_6 >> 2)
+          // numberOfRawDataBlocks = num_6 & 0x03
+
+          const codec = `mp4a.40.${channelConfiguration}`
 
           // 采样率对照表
-          // const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
+          const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
+          const sampleRate = sampleRates[samplingFrequencyIndex]
 
-          // const sampleRate = sampleRates[samplingFrequencyIndex]
-          const sampleRate = 48000
-
-          const codec = `mp4a.40.${audioObjectType}`
-
-          const numberOfChannels = channelMode === 3 ? 1 : 2
-
-          this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels }
+          this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels: channelConfiguration }
           this.on.config && this.on.config(this.audioConfig)
         }
       }
