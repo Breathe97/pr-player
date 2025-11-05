@@ -31,7 +31,7 @@ interface PrPlayerOption {
 export class PrPlayer {
   private option: PrPlayerOption = {
     debug: false,
-    frame_track: true
+    frame_track: false
   }
 
   private prFetch = new PrFetch()
