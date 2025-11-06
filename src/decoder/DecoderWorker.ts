@@ -34,7 +34,7 @@ export class DecoderWorker {
       }
     }
   }
-
+  init = (option: { decodingSpeed: number; frameTrack?: boolean; minFrameTrackCacheNum?: number }) => this.worker.postMessage({ action: 'init', data: option })
   setFrameTrack = (frameTrack: boolean) => this.worker.postMessage({ action: 'setFrameTrack', data: frameTrack })
 
   audio = {

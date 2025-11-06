@@ -9,21 +9,25 @@ export class Decoder {
 
   private hasKeyFrame = false
 
-  private frameTrack = true // 追帧
-
   private baseTime = 0 // ms
 
   private pendingChunks: PendingChunk[] = []
 
   private isProcessing = false
 
-  private decodeTimer = 0
+  private decodeTimer = 0 // 解码定时器
+
+  private frameTrack = false // 追帧
+
+  private minFrameTrackCacheNum = 20 // 最小追帧缓存数 (开启追帧才有效)
 
   private decodingSpeed = 40 // ms
 
   private decodingSpeedRatio = 1
 
   private maxDecodingSpeedRatio = 2
+
+  private nextRenderTime?: number // 下一次渲染的时间
 
   public on: On = { audio: {}, video: {} }
 
@@ -32,15 +36,39 @@ export class Decoder {
     this.initDecodeInterval()
   }
 
+  init = (option: { decodingSpeed: number; frameTrack?: boolean; minFrameTrackCacheNum?: number }) => {
+    const { decodingSpeed, frameTrack, minFrameTrackCacheNum } = option
+    if (decodingSpeed !== undefined) {
+      this.decodingSpeed = decodingSpeed
+    }
+    if (frameTrack !== undefined) {
+      this.frameTrack = frameTrack
+    }
+    if (minFrameTrackCacheNum !== undefined) {
+      this.minFrameTrackCacheNum = minFrameTrackCacheNum
+    }
+  }
+
   setFrameTrack = (frameTrack: boolean) => {
     this.frameTrack = frameTrack
+    if (this.frameTrack === false) {
+      this.decodingSpeedRatio = 1
+    }
   }
 
   private initDecodeInterval = () => {
+    // 每一次解码记录解码前时间 然后对比当前延迟时间计算差值 然后用于落后补偿
+    let timeout = this.decodingSpeed / this.decodingSpeedRatio
+    const now = this.baseTime + performance.now()
+    if (this.nextRenderTime) {
+      const laggingTime = now - this.nextRenderTime
+      timeout -= laggingTime
+    }
+    this.nextRenderTime = now + timeout
     this.decodeTimer = setTimeout(() => {
       this.decode()
-      this.initDecodeInterval()
-    }, this.decodingSpeed / this.decodingSpeedRatio)
+      this.initDecodeInterval() // 进行下一次解码
+    }, timeout)
   }
 
   private decode = () => {
@@ -52,14 +80,14 @@ export class Decoder {
       // 追帧
       if (this.frameTrack) {
         const length = this.pendingChunks.length
-        if (length >= 50) {
-          const suggestRatio = Math.min(1 + (length - 50) / 100, this.maxDecodingSpeedRatio)
-          this.decodingSpeedRatio = suggestRatio
+        if (length >= this.minFrameTrackCacheNum) {
+          const suggestRatio = Math.min(1 + (length - this.minFrameTrackCacheNum) / 100, this.maxDecodingSpeedRatio)
+          this.decodingSpeedRatio = Number(suggestRatio.toFixed(1))
         } else {
           this.decodingSpeedRatio = 1
         }
       }
-      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: ${this.decodingSpeedRatio}`, this.pendingChunks.length)
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe:${this.decodingSpeed}, ${this.decodingSpeedRatio}`, this.pendingChunks.length)
 
       if (!chunk) break
       const { type, init } = chunk

@@ -137,7 +137,7 @@ export class PrPlayer {
    * @param frameTrack?: boolean
    */
   setFrameTrack = (frameTrack: boolean) => {
-    // this.renderWorker?.setOption({ frameTrack })
+    this.decoderWorker?.setFrameTrack(frameTrack)
   }
 
   /**
@@ -165,6 +165,9 @@ export class PrPlayer {
       if (this.option.debug) {
         console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: info`, info)
       }
+      const { framerate = 25 } = info
+      const decodingSpeed = 1000 / framerate
+      this.decoderWorker?.init({ decodingSpeed })
       this.on.demuxer.info && this.on.demuxer.info(info)
     }
 
@@ -412,9 +415,10 @@ export class PrPlayer {
     start: async () => {
       try {
         await this.hls.getSegments()
-        this.hls.getSegmentsTimer = window.setInterval(this.hls.getSegments, 1000)
+        this.hls.getSegmentsTimer = window.setInterval(this.hls.getSegments, 500)
         if (this.hls.isLive === false) {
           clearInterval(this.hls.getSegmentsTimer)
+          this.decoderWorker?.setFrameTrack(false) // 关闭追帧
         }
 
         while (true) {
@@ -433,7 +437,7 @@ export class PrPlayer {
               if (done) break // 读取完成
             }
           } else {
-            await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+            await new Promise((resolve) => setTimeout(() => resolve(true), 300))
           }
         }
       } catch (error: any) {

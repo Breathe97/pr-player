@@ -25,10 +25,10 @@ export class Render {
     if (this.cutOption) {
       const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = this.cutOption
       bitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
-      this.cutOption && bitmap.close() // 剪切需要创建新的 ImageBitmap 才需要关闭
     }
 
     const videoFrame = new VideoFrame(bitmap, { timestamp })
+    this.cutOption && bitmap.close() // 剪切需要创建新的 ImageBitmap 才需要关闭
     this.writer.write(videoFrame)
     videoFrame.close()
   }
