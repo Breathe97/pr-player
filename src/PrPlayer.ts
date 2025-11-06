@@ -109,6 +109,11 @@ export class PrPlayer {
     this.demuxerWorker?.destroy()
     this.decoderWorker?.destroy()
     this.renderWorker?.destroy()
+    const keys = [...this.cutRenders.keys()]
+    for (const key of keys) {
+      this.cutRenders.get(key)?.worker.destroy()
+      this.cutRenders.delete(key)
+    }
     stopStream(this.stream)
     this.audioPlayer?.destroy()
   }
