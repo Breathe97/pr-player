@@ -1,7 +1,7 @@
 {
   "name": "pr-player",
   "description": "对 flv 格式的地址进行解析 并输出 canvas、stream，提供 SEI 回调，以及 cut 等相关能力，以支持根据业务层 SEI 对视频进行剪切渲染。",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "type": "module",
   "files": [
     "dist"
