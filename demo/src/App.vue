@@ -4,7 +4,7 @@
     <div style="margin: 8px 0; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap">
       <el-input style="width: 320px" v-model="url" placeholder="Please input" class="input-with-select">
         <template #prepend>
-          <el-select v-model="url_type" placeholder="Select" style="width: 72px" @change="selectUrl">
+          <el-select v-model="url_type" placeholder="Select" style="width: 100px" @change="selectUrl">
             <el-option v-for="item in url_options" :label="item.label" :value="item.value" />
           </el-select>
         </template>
@@ -42,13 +42,13 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_8794504945/1762399086953.flv?auth_key=1762485486-0-0-16a9c56d32c1cb5b365f27376237e3ca' },
+  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_8794504945/1762400890779.flv?auth_key=1762487290-0-0-7ba91376c04b1d7cc160cdd6067aa860' },
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_8794504945/1762399086953.m3u8?auth_key=1762485486-0-0-ddb52e1d16d2a1b2e76e5cf26ca33708' },
+  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_8794504945/1762400890779.m3u8?auth_key=1762487290-0-0-4d40e26e7dddefbd77915fc43772e850' },
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
-const url_type = ref<'flv' | 'hls'>('flv')
+const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf'>('hls-live')
 
 const url = ref('')
 
