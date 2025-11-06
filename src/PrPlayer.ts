@@ -340,7 +340,18 @@ export class PrPlayer {
   private flv = {
     start: async () => {
       try {
-        const res = await this.prFetch.request(this.url)
+        this.url += '3'
+        let res = await this.prFetch.request(this.url)
+        if (res.status !== 200) {
+          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+          res = await this.prFetch.request(this.url)
+        }
+        if (res.status !== 200) {
+          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+          res = await this.prFetch.request(this.url)
+        }
+        if (res.status !== 200) throw new Error('request is error.')
+
         const reader = res.body?.getReader()
         if (!reader) throw new Error('reader is error.')
         while (true) {
@@ -352,6 +363,7 @@ export class PrPlayer {
         }
       } catch (error: any) {
         if (error?.name !== 'AbortError') throw Error(error)
+        this.on.error && this.on.error(error)
       }
     }
   }
@@ -393,29 +405,42 @@ export class PrPlayer {
       return { baseUrl, targetDuration, isLive, segments }
     },
     getSegments: async () => {
-      const prFetch = new PrFetch()
-      const res = await prFetch.request(this.url)
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('reader is error.')
-      while (true) {
-        const { done, value } = await reader.read()
-        if (value) {
-          const info = await this.hls.parse(value)
-          const { segments = [], isLive = false } = info
-          this.hls.isLive = isLive
-          // 非在线视频强制关闭追帧
-          if (isLive === false) {
-            this.option.frame_track = false
-            this.renderWorker?.setOption({ frame_track: false })
-          }
-          let urls = Array.from(segments, (item: any) => item.url)
-          const index = urls.findIndex((url) => url === this.hls.url)
-          if (index !== -1) {
-            urls = urls.slice(index + 1)
-          }
-          this.hls.urls = urls
+      try {
+        const prFetch = new PrFetch()
+        let res = await prFetch.request(this.url)
+        if (res.status !== 200) {
+          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+          res = await prFetch.request(this.url)
         }
-        if (done) break // 读取完成
+        if (res.status !== 200) {
+          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+          res = await prFetch.request(this.url)
+        }
+        if (res.status !== 200) throw new Error('request is error.')
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('reader is error.')
+        while (true) {
+          const { done, value } = await reader.read()
+          if (value) {
+            const info = await this.hls.parse(value)
+            const { segments = [], isLive = false } = info
+            this.hls.isLive = isLive
+            // 非在线视频强制关闭追帧
+            if (isLive === false) {
+              this.option.frame_track = false
+              this.renderWorker?.setOption({ frame_track: false })
+            }
+            let urls = Array.from(segments, (item: any) => item.url)
+            const index = urls.findIndex((url) => url === this.hls.url)
+            if (index !== -1) {
+              urls = urls.slice(index + 1)
+            }
+            this.hls.urls = urls
+          }
+          if (done) break // 读取完成
+        }
+      } catch (error) {
+        this.on.error && this.on.error(error)
       }
     },
 
