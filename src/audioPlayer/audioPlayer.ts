@@ -73,7 +73,8 @@ export class AudioPlayer {
     this.pendingSources = []
   }
 
-  async push(audioData: AudioData) {
+  async push(audio: { audioData: AudioData; playbackRate?: number }) {
+    const { audioData, playbackRate = 1 } = audio
     try {
       if (!this.audioContext) return
       if (!this.destination) return
@@ -86,11 +87,17 @@ export class AudioPlayer {
       // 2. 创建播放源
       const source = this.audioContext.createBufferSource()
       source.buffer = audioBuffer
+      source.playbackRate.value = playbackRate // 设置播放速率
+
+      // 如果需要保持音调，可以设置 detune 为 0
+      // source.detune.value = 0
+
       source.connect(this.destination)
 
-      // 3. 计算精确播放时间
+      // 3. 计算精确播放时间（考虑播放速率）
       const startTime = Math.max(this.nextStartTime, this.audioContext.currentTime)
-      this.nextStartTime = startTime + audioBuffer.duration
+      const actualDuration = audioBuffer.duration / playbackRate // 实际播放时长
+      this.nextStartTime = startTime + actualDuration
 
       // 4. 调度播放
       source.start(startTime)

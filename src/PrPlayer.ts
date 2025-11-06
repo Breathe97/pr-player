@@ -16,7 +16,7 @@ interface On {
     sei?: (_payload: Uint8Array) => void
   }
   decoder: {
-    audio?: (_AudioData: AudioData) => void
+    audio?: (_audio: { audioData: AudioData; playbackRate?: number }) => void
     video?: (_frame: { timestamp: number; bitmap: ImageBitmap }) => void
   }
   error?: (_e: any) => void
@@ -233,9 +233,9 @@ export class PrPlayer {
    */
   private initDecoder = () => {
     this.decoderWorker = new DecoderWorker()
-    this.decoderWorker.on.audio.decode = (audioData) => {
-      this.audioPlayer?.push(audioData)
-      this.on.decoder.audio && this.on.decoder.audio(audioData)
+    this.decoderWorker.on.audio.decode = (audio) => {
+      this.audioPlayer?.push(audio)
+      this.on.decoder.audio && this.on.decoder.audio(audio)
     }
     this.decoderWorker.on.audio.error = (e) => {
       if (this.option.debug) {

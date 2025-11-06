@@ -42,13 +42,14 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
+  { label: 'flv-dy', value: 'https://pull-flv-f11.douyincdn.com/media/stream-694732351481316012.flv?arch_hrchy=w1&exp_hrchy=w1&expire=1763033391&major_anchor_level=common&sign=53d84b9becc2141537b3d2dfadab2ac5&t_id=037-202511061929505D18A07DAB0FC6C972BF-V3DWVh&unique_id=stream-694732351481316012_684_flv&_session_id=266-202511061929515335433192BB2307C9BA.1762428591533.89795&rsi=0&abr_pts=-800' },
   { label: 'flv-live', value: 'https://pull.pryun.vip/stream_9966068797/1762420232664.flv?auth_key=1762506632-0-0-235943d8cd7e1121e203aad9e4aab874' },
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
   { label: 'hls-live', value: 'https://pull.pryun.vip/stream_9966068797/1762420232664.m3u8?auth_key=1762506632-0-0-89045353da1cc59b25f562f9a0474413' },
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
-const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf'>('flv')
+const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv')
 
 const url = ref('')
 

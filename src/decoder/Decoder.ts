@@ -137,8 +137,9 @@ export class Decoder {
       this.audio.destroy()
       this.audioDecoderConfig = { ...config }
       this.audioDecoder = new AudioDecoder({
-        output: (data: AudioData) => {
-          this.on.audio.decode && this.on.audio.decode(data)
+        output: (audioData: AudioData) => {
+          const playbackRate = this.decodingSpeedRatio
+          this.on.audio.decode && this.on.audio.decode({ audioData, playbackRate })
         },
         error: (e) => {
           this.on.audio.error && this.on.audio.error(e)
