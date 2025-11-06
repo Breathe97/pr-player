@@ -1,4 +1,4 @@
-import type { On } from './type'
+import type { CutOption, On } from './type'
 
 export class Decoder {
   private audioDecoderConfig?: AudioDecoderConfig
@@ -9,9 +9,13 @@ export class Decoder {
 
   private hasKeyFrame = false
 
+  private baseTime = 0 // ms
+
   public on: On = { audio: {}, video: {} }
 
-  constructor() {}
+  constructor() {
+    this.baseTime = new Date().getTime() - performance.now()
+  }
 
   audio = {
     init: (config: AudioDecoderConfig) => {
@@ -48,18 +52,8 @@ export class Decoder {
       this.video.destroy()
       this.videoDecoderConfig = { ...config }
       this.videoDecoder = new VideoDecoder({
-        output: async (frame: VideoFrame) => {
-          const bitmap = await createImageBitmap(frame)
-          const timestamp = frame.timestamp
-          frame.close()
-          if (bitmap.width > 0 && bitmap.height > 0) {
-            this.on.video.decode && this.on.video.decode({ timestamp, bitmap })
-          } else {
-            bitmap.close()
-          }
-        },
+        output: async (frame: VideoFrame) => this.video.onVideoFrame(frame),
         error: (e) => {
-          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: e`, e)
           this.on.video.error && this.on.video.error(e)
         }
       })
@@ -77,6 +71,16 @@ export class Decoder {
     },
     flush: () => {
       this.videoDecoder?.flush()
+    },
+    onVideoFrame: async (frame: VideoFrame) => {
+      const timestamp = frame.timestamp + this.baseTime * 1000
+      const bitmap = await createImageBitmap(frame)
+      frame.close()
+      if (bitmap.width > 0 && bitmap.height > 0) {
+        this.on.video.decode && this.on.video.decode({ timestamp, bitmap })
+      } else {
+        bitmap.close()
+      }
     },
     destroy: () => {
       this.videoDecoderConfig = undefined

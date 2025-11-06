@@ -33,22 +33,20 @@ export const stopStream = (stream: MediaStream | undefined) => {
   }
 }
 
-export const createRender = () => {
-  const worker = new RenderWorker()
-
-  const canvas = document.createElement('canvas')
-  const offscreenCanvas = canvas.transferControlToOffscreen()
-
+export const createStreamGenerator = () => {
   // @ts-ignore
   const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
 
   const stream = new MediaStream([trackGenerator])
 
+  const worker = new RenderWorker()
+
+  worker.init({ writable: trackGenerator.writable })
+
   const destroy = () => {
     worker.destroy()
     stopStream(stream)
   }
-  worker.init({ offscreenCanvas, writable: trackGenerator.writable })
 
-  return { worker, canvas, stream, destroy }
+  return { worker, stream, destroy }
 }

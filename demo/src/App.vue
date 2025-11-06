@@ -48,7 +48,7 @@ const url_options = [
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
-const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf'>('hls-live')
+const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf'>('flv')
 
 const url = ref('')
 
@@ -105,34 +105,21 @@ const play = async () => {
   await player.start(url.value)
   player.setMute(false)
 
-  {
-    const canvas = player.getCanvas()
-    if (canvas) {
-      canvas.style.height = '100%'
-      const canvas_view = document.querySelector('#canvas-video-frame-view')
-      if (canvas_view) {
-        canvas_view.replaceChildren(canvas)
-      }
-    }
-  }
-
-  {
-    const stream = player.getStream()
-    if (stream) {
-      const dom = document.querySelector('#canvas-video-stream-view')
-      const view = document.createElement('video')
-      view.style.width = '100%'
-      view.style.height = '100%'
-      view.srcObject = stream
-      view.play()
-      dom?.replaceChildren(view)
-    }
+  const stream = player.getStream()
+  if (stream) {
+    const dom = document.querySelector('#canvas-video-stream-view')
+    const view = document.createElement('video')
+    view.style.width = '100%'
+    view.style.height = '100%'
+    view.srcObject = stream
+    view.play()
+    dom?.replaceChildren(view)
   }
 }
 
 const cut = () => {
   cut_pause.value = false
-  const { width, height } = info.value
+  const { width, height } = info.value || { width: 480, height: 360 }
   player.cut.create('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
 
   {

@@ -8,3 +8,10 @@ export interface On {
     error?: (_e: DOMException) => void
   }
 }
+
+export interface CutOption extends ImageBitmapOptions {
+  sx: number
+  sy: number
+  sw: number
+  sh: number
+}

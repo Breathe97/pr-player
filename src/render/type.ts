@@ -4,5 +4,3 @@ export interface CutOption extends ImageBitmapOptions {
   sw: number
   sh: number
 }
-
-export type Shader = 'canvas' | 'stream'
