@@ -3,7 +3,7 @@
 // 参考 https://blog.csdn.net/shaosunrise/article/details/121548065
 // 参考 https://www.cnblogs.com/saysmy/p/10716886.html
 
-import type { Chunk } from '../cacher/Cacher'
+import type { Chunk } from './Cacher'
 import { parseAVCC } from './264Parser'
 import type { AudioConfig, VideoConfig } from './Demuxer'
 

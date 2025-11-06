@@ -201,7 +201,7 @@ export class PrPlayer {
           {
             const { type, dts, data } = chunk
             const timestamp = dts * 1
-            this.decoderWorker.audio.decode({ type, timestamp, data })
+            this.decoderWorker.audio.push({ type, timestamp, data })
           }
           break
         case 'video':
@@ -209,7 +209,7 @@ export class PrPlayer {
             const { type, dts, data, nalus = [] } = chunk
 
             const timestamp = dts * 1000
-            this.decoderWorker.video.decode({ type, timestamp, data })
+            this.decoderWorker.video.push({ type, timestamp, data })
             for (const nalu of nalus) {
               if (nalu.byteLength <= 4) continue
               const { header, data } = parseNalu(nalu)
@@ -231,6 +231,7 @@ export class PrPlayer {
   private initDecoder = () => {
     this.decoderWorker = new DecoderWorker()
     this.decoderWorker.on.audio.decode = (audioData) => {
+      this.audioPlayer?.push(audioData)
       this.on.decoder.audio && this.on.decoder.audio(audioData)
     }
     this.decoderWorker.on.audio.error = (e) => {

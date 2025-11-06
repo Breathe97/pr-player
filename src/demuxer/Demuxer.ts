@@ -1,5 +1,5 @@
-import { Cacher } from '../cacher/Cacher'
-import type { Chunk } from '../cacher/Cacher'
+import { Cacher } from './Cacher'
+import type { Chunk } from './Cacher'
 import { ParseTS } from './ts264Parser'
 import { ParseFLV } from './flv264Parser'
 

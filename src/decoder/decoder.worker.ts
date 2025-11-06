@@ -2,7 +2,7 @@ import { Decoder } from './Decoder'
 
 interface WorkerMessage {
   type: 'audio' | 'video'
-  action: 'init' | 'decode' | 'flush' | 'destroy'
+  action: 'init' | 'push' | 'flush' | 'destroy'
   data: any
 }
 
@@ -16,6 +16,12 @@ decoder.on.video.error = (data) => postMessage({ type: 'video', action: 'onError
 
 onmessage = (event: MessageEvent<WorkerMessage>) => {
   const { type, action, data } = event.data
-  const func = decoder[type][action]
-  func && func(data)
+  if (type) {
+    const func = decoder[type][action]
+    func && func(data)
+  } else {
+    // @ts-ignore
+    const func = decoder[action]
+    func && func(data)
+  }
 }

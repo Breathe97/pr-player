@@ -1,6 +1,6 @@
 // 参考 https://zhuanlan.zhihu.com/p/496813890
 
-import type { Chunk } from '../cacher/Cacher'
+import type { Chunk } from './Cacher'
 import { createAVCC, mergeNalus, naluToAVCC, parseAVCC } from './264Parser'
 import type { AudioConfig, VideoConfig } from './Demuxer'
 

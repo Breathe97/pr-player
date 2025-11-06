@@ -9,9 +9,14 @@ export interface On {
   }
 }
 
-export interface CutOption extends ImageBitmapOptions {
-  sx: number
-  sy: number
-  sw: number
-  sh: number
+interface PendingAudioChunk {
+  type: 'audio'
+  init: EncodedAudioChunkInit
 }
+
+interface PendingVideoChunk {
+  type: 'video'
+  init: EncodedAudioChunkInit
+}
+
+export type PendingChunk = PendingAudioChunk | PendingVideoChunk

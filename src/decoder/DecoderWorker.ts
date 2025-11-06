@@ -35,9 +35,11 @@ export class DecoderWorker {
     }
   }
 
+  setFrameTrack = (frameTrack: boolean) => this.worker.postMessage({ action: 'setFrameTrack', data: frameTrack })
+
   audio = {
     init: (config: AudioDecoderConfig) => this.worker.postMessage({ type: 'audio', action: 'init', data: config }),
-    decode: (init: EncodedAudioChunkInit) => this.worker.postMessage({ type: 'audio', action: 'decode', data: init }),
+    push: (init: EncodedAudioChunkInit) => this.worker.postMessage({ type: 'audio', action: 'push', data: init }),
     flush: () => this.worker.postMessage({ type: 'audio', action: 'flush' }),
     destroy: () => {
       this.worker.postMessage({ type: 'audio', action: 'destroy' })
@@ -46,7 +48,7 @@ export class DecoderWorker {
 
   video = {
     init: (config: VideoDecoderConfig) => this.worker.postMessage({ type: 'video', action: 'init', data: config }),
-    decode: (init: EncodedVideoChunkInit) => this.worker.postMessage({ type: 'video', action: 'decode', data: init }),
+    push: (init: EncodedVideoChunkInit) => this.worker.postMessage({ type: 'video', action: 'push', data: init }),
     flush: () => this.worker.postMessage({ type: 'video', action: 'flush' }),
     destroy: () => {
       this.worker.postMessage({ type: 'video', action: 'destroy', data: {} })
@@ -54,8 +56,7 @@ export class DecoderWorker {
   }
 
   destroy = () => {
-    this.worker.postMessage({ type: 'audio', action: 'destroy' })
-    this.worker.postMessage({ type: 'video', action: 'destroy', data: {} })
+    this.worker.postMessage({ action: 'destroy' })
     this.worker.terminate()
   }
 }

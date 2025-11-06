@@ -42,9 +42,9 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_8794504945/1762400890779.flv?auth_key=1762487290-0-0-7ba91376c04b1d7cc160cdd6067aa860' },
+  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_9966068797/1762420232664.flv?auth_key=1762506632-0-0-235943d8cd7e1121e203aad9e4aab874' },
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_8794504945/1762400890779.m3u8?auth_key=1762487290-0-0-4d40e26e7dddefbd77915fc43772e850' },
+  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_9966068797/1762420232664.m3u8?auth_key=1762506632-0-0-89045353da1cc59b25f562f9a0474413' },
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
