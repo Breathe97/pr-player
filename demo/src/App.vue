@@ -20,10 +20,6 @@
     </div>
     <div class="play-view">
       <div class="canvas-video-frame">
-        <div class="title">VideoFrame</div>
-        <div id="canvas-video-frame-view" style="background-color: antiquewhite"></div>
-      </div>
-      <div class="canvas-video-frame">
         <div class="title">MediaStream</div>
         <div id="canvas-video-stream-view" style="background-color: aquamarine"></div>
       </div>
@@ -49,7 +45,7 @@ const url_options = [
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
-const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv')
+const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv-dy')
 
 const url = ref('')
 
@@ -63,30 +59,30 @@ const init = () => {
 }
 init()
 
-const info = ref()
-
 const player = new PrPlayer({ debug: true })
 
-// {
-//   player.on.demuxer.info = (info) => {
-//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
-//   }
-//   player.on.demuxer.chunk = (chunk) => {
-//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
-//   }
-//   player.on.demuxer.sei = (sei) => {
-//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, sei)
-//   }
-// }
+const videoInfo = ref()
+{
+  player.on.demuxer.info = (info) => {
+    videoInfo.value = info
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
+  }
+  // player.on.demuxer.chunk = (chunk) => {
+  //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+  // }
+  // player.on.demuxer.sei = (sei) => {
+  //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, sei)
+  // }
+}
 
-// {
-//   player.on.decoder.audio = (audio) => {
-//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: audio`, audio)
-//   }
-//   player.on.decoder.video = (video) => {
-//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
-//   }
-// }
+{
+  // player.on.decoder.audio = (audio) => {
+  //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: audio`, audio)
+  // }
+  // player.on.decoder.video = (video) => {
+  //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
+  // }
+}
 
 const frame_track = ref(false)
 const setFrameTrack = () => {
@@ -129,8 +125,8 @@ const play = async () => {
 
 const cut = () => {
   cut_pause.value = false
-  const { width, height } = info.value || { width: 480, height: 360 }
-  player.cut.create('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
+  const { width, height } = videoInfo.value || { width: 480, height: 360 }
+  player.cut.create('cut-any-key', { sx: width * 0.2, sy: height * 0.2, sw: width * 0.6, sh: height * 0.6 })
 
   {
     const stream = player.cut.getStream('cut-any-key')
@@ -166,8 +162,8 @@ const cut = () => {
 .canvas-video-frame,
 .canvas-video-cut {
   flex: 1;
-  min-width: 480px;
-  max-width: 600px;
+  min-width: 800px;
+  max-width: 960px;
   aspect-ratio: 16/9;
   display: flex;
   flex-direction: column;
