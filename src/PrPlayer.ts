@@ -60,16 +60,6 @@ export class PrPlayer {
   }
 
   /**
-   * 初始化
-   */
-  init = () => {
-    this.initDecoder()
-    this.initRender()
-    this.audioPlayer = new AudioPlayer()
-    this.audioPlayer.init()
-  }
-
-  /**
    * 开始播放
    * @param url : string
    */
@@ -151,6 +141,54 @@ export class PrPlayer {
   isReady = () => {
     const fun = () => this.stream?.active === true
     return this.prResolves.add('isReady', fun)
+  }
+
+  cut = {
+    /**
+     * 创建剪切
+     */
+    create: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
+      let renderIns = this.cutRenders.get(key)
+      if (renderIns) {
+        renderIns.worker.setCut(cutOption)
+        renderIns.worker.setPause(false)
+        return renderIns
+      }
+      renderIns = createStreamGenerator()
+      renderIns.worker.setCut(cutOption)
+      this.cutRenders.set(key, renderIns)
+      return renderIns
+    },
+
+    /**
+     * 获取媒体流
+     */
+    getStream: (key: string) => this.cutRenders.get(key)?.stream,
+
+    /**
+     * 设置暂停
+     * @param pause: boolean
+     */
+    setPause: (key: string, pause: boolean) => {
+      this.cutRenders.get(key)?.worker.setPause(pause)
+    },
+    /**
+     * 移除剪切
+     */
+    remove: (key: string) => {
+      this.cutRenders.get(key)?.destroy()
+      this.cutRenders.delete(key)
+    }
+  }
+
+  /**
+   * 初始化
+   */
+  private init = () => {
+    this.initDecoder()
+    this.initRender()
+    this.audioPlayer = new AudioPlayer()
+    this.audioPlayer.init()
   }
 
   /**
@@ -272,44 +310,6 @@ export class PrPlayer {
     this.renderWorker = worker
     this.stream = stream
     this.renderWorker.setPause(false)
-  }
-
-  cut = {
-    /**
-     * 创建剪切
-     */
-    create: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
-      let renderIns = this.cutRenders.get(key)
-      if (renderIns) {
-        renderIns.worker.setCut(cutOption)
-        renderIns.worker.setPause(false)
-        return renderIns
-      }
-      renderIns = createStreamGenerator()
-      renderIns.worker.setCut(cutOption)
-      this.cutRenders.set(key, renderIns)
-      return renderIns
-    },
-
-    /**
-     * 获取媒体流
-     */
-    getStream: (key: string) => this.cutRenders.get(key)?.stream,
-
-    /**
-     * 设置暂停
-     * @param pause: boolean
-     */
-    setPause: (key: string, pause: boolean) => {
-      this.cutRenders.get(key)?.worker.setPause(pause)
-    },
-    /**
-     * 移除剪切
-     */
-    remove: (key: string) => {
-      this.cutRenders.get(key)?.destroy()
-      this.cutRenders.delete(key)
-    }
   }
 
   private flv = {
