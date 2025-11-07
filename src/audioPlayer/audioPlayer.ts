@@ -80,7 +80,7 @@ export class AudioPlayer {
       if (!this.destination) return
 
       // 1. 转换 AudioData 为 AudioBuffer
-      const audioBuffer = await convertToAudioBuffer(this.audioContext, audioData)
+      let audioBuffer = await convertToAudioBuffer(this.audioContext, audioData)
 
       if (!audioBuffer) return
 
@@ -89,8 +89,9 @@ export class AudioPlayer {
       source.buffer = audioBuffer
       source.playbackRate.value = playbackRate // 设置播放速率
 
-      // 如果需要保持音调，可以设置 detune 为 0
-      // source.detune.value = 0
+      // 使用更精确的detune计算
+      const exactDetune = -1200 * Math.log2(playbackRate)
+      source.detune.value = exactDetune
 
       source.connect(this.destination)
 
