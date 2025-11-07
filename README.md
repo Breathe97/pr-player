@@ -1,4 +1,4 @@
-# 对 flv 格式的地址进行解析 并输出 canvas、stream，提供 SEI 回调，以及 cut 等相关能力，以支持根据业务层 SEI 对视频进行剪切渲染。
+# 对 flv 格式的地址进行解析 并输出 MediaStream，提供 demuxer 层(info、chunk、sei)回调、 decoder 层(audio、video)回调 ，提供 cut 等相关能力，以支持根据业务层 SEI 对视频进行剪切渲染。
 
 ## 立即开始
 
@@ -13,45 +13,50 @@ npm i pr-player
 ```js
 import { PrPlayer } from 'pr-player'
 
-// 除此之外 如果你需要自定义扩展 为你提供了独立的 Demuxer、Decoder、Render，并且提供对应的worker
-import { Demuxer, DemuxerWorker } from '../../src/index'
-import { Decoder, DecoderWorker } from '../../src/index'
-import { Render, RenderWorker } from '../../src/index'
+// 除此之外 如果你需要自定义扩展 为你提供了独立的 Demuxer、Decoder、Render
+import { DemuxerWorker } from '../../src/index'
+import { DecoderWorker } from '../../src/index'
+import { RenderWorker } from '../../src/index'
 ```
 
 ## 快速使用
 
 ```js
 const player = new PrPlayer()
-const play = async () => {
-  pause.value = false
-  await player.start('https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv')
-  player.setMute(false)
+const player = new PrPlayer({ debug: true })
 
-  // 渲染方式一 tip: 默认只开启 'stream' 如果需要同时使用 'canvas' 、'stream' 则需要手动设置(Player.setShader)
-  {
-    const canvas = player.getCanvas()
+// 如果你只需要复解器相关的能力 可以拿到复解后的所有回调
+{
+  player.on.demuxer.info = (info) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
   }
-
-  // 渲染方式二
-  {
-    const stream = player.getStream()
+  player.on.demuxer.chunk = (chunk) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+  }
+  player.on.demuxer.sei = (sei) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, sei)
   }
 }
+
+// 如果你只需要解码器相关的能力 可以拿到解码后的所有回调
+{
+  player.on.decoder.audio = (audio) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: audio`, audio)
+  }
+  player.on.decoder.video = (video) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
+  }
+}
+
+await player.start('https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv')
+player.setMute(false) // 默认都是静音 所以主动开启
+const stream = player.getStream()
 ```
 
 ### 暂停渲染
 
 ```js
 player.setPause(true)
-```
-
-### 设置渲染模式
-
-- 默认只开启 'stream' 如果需要同时使用 'canvas' 、'stream' 则需要手动设置
-
-```js
-player.setShader(['canvas', 'stream'])
 ```
 
 ### 停止
@@ -68,10 +73,6 @@ player.stop()
 
 ```js
 player.cut.create('cut-any-key', { sx: width * 0.25, sy: height * 0.4, sw: width * 0.5, sh: height * 0.5 })
-
-const canvas = player.cut.getCanvas('cut-any-key')
-
-// 渲染方式二
 const stream = player.cut.getStream('cut-any-key')
 ```
 
@@ -79,14 +80,6 @@ const stream = player.cut.getStream('cut-any-key')
 
 ```js
 player.cut.setPause('cut-any-key', true)
-```
-
-### 设置渲染模式
-
-- 默认只开启 'stream' 如果需要同时使用 'canvas' 、'stream' 则需要手动设置
-
-```js
-player.cut.setShader('cut-any-key', ['canvas', 'stream'])
 ```
 
 ### 移除剪切

@@ -67,17 +67,26 @@ const info = ref()
 
 const player = new PrPlayer({ debug: true })
 
-player.on.demuxer.info = (e) => {
-  info.value = e
-}
+// {
+//   player.on.demuxer.info = (info) => {
+//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
+//   }
+//   player.on.demuxer.chunk = (chunk) => {
+//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
+//   }
+//   player.on.demuxer.sei = (sei) => {
+//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, sei)
+//   }
+// }
 
-player.on.demuxer.chunk = (_e) => {
-  // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, e)
-}
-
-player.on.demuxer.sei = (_e) => {
-  // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, e)
-}
+// {
+//   player.on.decoder.audio = (audio) => {
+//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: audio`, audio)
+//   }
+//   player.on.decoder.video = (video) => {
+//     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
+//   }
+// }
 
 const frame_track = ref(false)
 const setFrameTrack = () => {
