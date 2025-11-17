@@ -2,7 +2,7 @@ import { Decoder } from './Decoder'
 
 interface WorkerMessage {
   type: 'audio' | 'video'
-  action: 'init' | 'push' | 'flush' | 'destroy'
+  action: 'push' | 'flush' | 'destroy'
   data: any
 }
 

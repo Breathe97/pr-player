@@ -38,10 +38,10 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-dy', value: 'https://pull-flv-f11.douyincdn.com/media/stream-694732351481316012.flv?arch_hrchy=w1&exp_hrchy=w1&expire=1763033391&major_anchor_level=common&sign=53d84b9becc2141537b3d2dfadab2ac5&t_id=037-202511061929505D18A07DAB0FC6C972BF-V3DWVh&unique_id=stream-694732351481316012_684_flv&_session_id=266-202511061929515335433192BB2307C9BA.1762428591533.89795&rsi=0&abr_pts=-800' },
-  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_9966068797/1762420232664.flv?auth_key=1762506632-0-0-235943d8cd7e1121e203aad9e4aab874' },
+  { label: 'flv-dy', value: 'https://pull-flv-f26.douyincdn.com/media/stream-694756842122773164.flv?arch_hrchy=w1&exp_hrchy=w1&expire=691af268&major_anchor_level=common&sign=51f8fb2c71a08a2f3af39d0b1f8d2284&t_id=037-20251110180112976F2FEA428EC19DFCFC-7nVaOR&unique_id=stream-694756842122773164_684_flv&_session_id=082-2025111018011269263710326FAD4B7EA8.1762768872692.60052&rsi=0&abr_pts=-800' },
+  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_1646482422/1763360541042.flv?auth_key=1763446941-0-0-a6def6da466ccbb1bdeb8ca6a4d0a164' },
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_9966068797/1762420232664.m3u8?auth_key=1762506632-0-0-89045353da1cc59b25f562f9a0474413' },
+  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_1646482422/1763360541042.m3u8?auth_key=1763446941-0-0-785a389d46abb66945491cf4ee586cf5' },
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
@@ -115,6 +115,7 @@ const play = async () => {
   if (stream) {
     const dom = document.querySelector('#canvas-video-stream-view')
     const view = document.createElement('video')
+    view.style.objectFit = 'cover'
     view.style.width = '100%'
     view.style.height = '100%'
     view.srcObject = stream
@@ -125,7 +126,9 @@ const play = async () => {
 
 const cut = () => {
   cut_pause.value = false
-  const { width, height } = videoInfo.value || { width: 480, height: 360 }
+  console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: videoInfo.value `, videoInfo.value)
+  const dom = document.querySelector('#canvas-video-stream-view')
+  const { width = dom?.clientWidth, height = dom?.clientHeight } = videoInfo.value || {}
   player.cut.create('cut-any-key', { sx: width * 0.2, sy: height * 0.2, sw: width * 0.6, sh: height * 0.6 })
 
   {

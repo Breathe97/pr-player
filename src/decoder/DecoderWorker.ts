@@ -1,3 +1,4 @@
+import { Pattern } from '../type'
 import Worker from './decoder.worker.ts?worker&inline' // 在生产环境中，可能会遇到 MIME type is text/html 的错误。可以通过添加 ?inline 参数避免单独生成 Worker 文件。
 import type { On } from './type'
 
@@ -34,7 +35,9 @@ export class DecoderWorker {
       }
     }
   }
-  init = (option: { decodingSpeed: number; frameTrack?: boolean; minFrameTrackCacheNum?: number }) => this.worker.postMessage({ action: 'init', data: option })
+
+  init = (pattern: Pattern) => this.worker.postMessage({ action: 'init', data: pattern })
+
   setFrameTrack = (frameTrack: boolean) => this.worker.postMessage({ action: 'setFrameTrack', data: frameTrack })
 
   audio = {

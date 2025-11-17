@@ -1,6 +1,9 @@
+import { Pattern } from '../type'
 import type { On, PendingChunk } from './type'
 
 export class Decoder {
+  private pattern: Pattern = 'flv'
+
   private audioDecoderConfig?: AudioDecoderConfig
   private audioDecoder?: AudioDecoder
 
@@ -17,36 +20,40 @@ export class Decoder {
 
   private decodeTimer = 0 // 解码定时器
 
-  private frameTrack = false // 追帧
+  private frameTrack = false // 是否开启自动追帧
 
-  private minFrameTrackCacheNum = 20 // 最小追帧缓存数 (开启追帧才有效)
+  private isFrameTrack = false // 当前是否正在追帧
 
-  private decodingSpeed = 40 // ms
+  private fameTrackOption: { [key in Pattern]: [number, number] } = {
+    // [停止追帧, 开启追帧]
+    flv: [20, 50],
+    hls: [200, 300],
+    dash: [50, 100],
+    rtmp: [50, 100]
+  }
+
+  private decodingSpeed = 16 // ms
+  private fps = 0 // 实时渲染fps
+
+  private firstVideoChunkTimestamp?: number
+  private secondVideoChunkTimestamp?: number
 
   private decodingSpeedRatio = 1
 
   private maxDecodingSpeedRatio = 2
 
+  private lastRenderTime?: number // 上一次渲染的时间
   private nextRenderTime?: number // 下一次渲染的时间
 
   public on: On = { audio: {}, video: {} }
 
-  constructor() {
+  constructor() {}
+
+  init = (pattern: Pattern) => {
+    this.destroy()
+    this.pattern = pattern
     this.baseTime = new Date().getTime() - performance.now()
     this.initDecodeInterval()
-  }
-
-  init = (option: { decodingSpeed: number; frameTrack?: boolean; minFrameTrackCacheNum?: number }) => {
-    const { decodingSpeed, frameTrack, minFrameTrackCacheNum } = option
-    if (decodingSpeed !== undefined) {
-      this.decodingSpeed = decodingSpeed
-    }
-    if (frameTrack !== undefined) {
-      this.frameTrack = frameTrack
-    }
-    if (minFrameTrackCacheNum !== undefined) {
-      this.minFrameTrackCacheNum = minFrameTrackCacheNum
-    }
   }
 
   setFrameTrack = (frameTrack: boolean) => {
@@ -59,12 +66,29 @@ export class Decoder {
   private initDecodeInterval = () => {
     // 每一次解码记录解码前时间 然后对比当前延迟时间计算差值 然后用于落后补偿
     let timeout = this.decodingSpeed / this.decodingSpeedRatio
+
     const now = this.baseTime + performance.now()
+
+    // 计算fps
+    {
+      if (!this.lastRenderTime) {
+        this.lastRenderTime = now
+      }
+
+      this.fps = Math.round(1000 / (now - this.lastRenderTime))
+      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: this.fps`, this.fps)
+    }
+
+    this.lastRenderTime = now // 上一次帧 渲染时间
+
+    // 下一帧渲染时间
     if (this.nextRenderTime) {
-      const laggingTime = now - this.nextRenderTime
+      const laggingTime = this.lastRenderTime - this.nextRenderTime // 代码运行补偿时间
       timeout -= laggingTime
     }
-    this.nextRenderTime = now + timeout
+
+    this.nextRenderTime = this.lastRenderTime + timeout // 下一帧渲染时间
+
     this.decodeTimer = setTimeout(() => {
       this.decode()
       this.initDecodeInterval() // 进行下一次解码
@@ -77,17 +101,34 @@ export class Decoder {
     while (true) {
       const chunk = this.pendingChunks.shift()
 
+      const cacheLength = this.pendingChunks.length
+
       // 追帧
       if (this.frameTrack) {
-        const length = this.pendingChunks.length
-        if (length >= this.minFrameTrackCacheNum) {
-          const suggestRatio = Math.min(1 + (length - this.minFrameTrackCacheNum) / 100, this.maxDecodingSpeedRatio)
+        const [min, max] = this.fameTrackOption[this.pattern]
+
+        // 接近最小阈值关闭追帧
+        if (cacheLength <= min) {
+          this.isFrameTrack = false
+        }
+
+        // 触发最大阈值 开始追帧
+        if (cacheLength >= max) {
+          this.isFrameTrack = true
+        }
+
+        if (this.isFrameTrack) {
+          const suggestRatio = Math.min(1 + (cacheLength - min) / 100, this.maxDecodingSpeedRatio)
           this.decodingSpeedRatio = Number(suggestRatio.toFixed(1))
         } else {
           this.decodingSpeedRatio = 1
         }
       }
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe:${this.decodingSpeed}, ${this.decodingSpeedRatio}`, this.pendingChunks.length)
+
+      // {
+      //   const { decodingSpeed, decodingSpeedRatio, fps } = this
+      //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: decode`, { fps, decodingSpeed, decodingSpeedRatio, cacheLength })
+      // }
 
       if (!chunk) break
       const { type, init } = chunk
@@ -104,6 +145,7 @@ export class Decoder {
           }
           break
       }
+
       if (type === 'video') break
     }
     this.isProcessing = false
@@ -120,6 +162,15 @@ export class Decoder {
     if (init.type === 'key') {
       this.hasKeyFrame = true
     }
+
+    // 计算解码fps
+    if (!this.firstVideoChunkTimestamp) {
+      this.firstVideoChunkTimestamp = init.timestamp
+    } else if (!this.secondVideoChunkTimestamp) {
+      this.secondVideoChunkTimestamp = init.timestamp
+      this.decodingSpeed = (this.secondVideoChunkTimestamp - this.firstVideoChunkTimestamp) / 1000
+    }
+
     if (this.hasKeyFrame) {
       const chunk = new EncodedVideoChunk(init)
       this.videoDecoder.decode(chunk)

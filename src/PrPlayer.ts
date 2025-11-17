@@ -7,6 +7,7 @@ import { getFormatFromUrlPattern, stopStream, createStreamGenerator } from './to
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/264Parser'
 import { PrFetch } from 'pr-fetch'
+import { Pattern } from './type'
 
 interface On {
   demuxer: {
@@ -66,12 +67,10 @@ export class PrPlayer {
   start = async (url: string) => {
     this.stop()
     this.url = url
-    this.init()
 
     const pattern = getFormatFromUrlPattern(url)
     if (pattern === 'unknown') throw new Error('This address cannot be parsed.')
-    this.initDemuxer(pattern)
-
+    this.init(pattern)
     switch (pattern) {
       case 'flv':
         {
@@ -184,9 +183,10 @@ export class PrPlayer {
   /**
    * 初始化
    */
-  private init = () => {
-    this.initDecoder()
+  private init = (pattern: Pattern) => {
+    this.initDecoder(pattern)
     this.initRender()
+    this.initDemuxer(pattern)
     this.audioPlayer = new AudioPlayer()
     this.audioPlayer.init()
   }
@@ -194,7 +194,7 @@ export class PrPlayer {
   /**
    * 初始化解复器
    */
-  private initDemuxer = (pattern: any) => {
+  private initDemuxer = (pattern: Pattern) => {
     this.demuxerWorker = new DemuxerWorker()
     this.demuxerWorker.init(pattern)
 
@@ -208,9 +208,6 @@ export class PrPlayer {
       if (this.option.debug) {
         console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: info`, info)
       }
-      const { framerate = 25 } = info
-      const decodingSpeed = 1000 / framerate
-      this.decoderWorker?.init({ decodingSpeed })
       this.on.demuxer.info && this.on.demuxer.info(info)
     }
 
@@ -274,8 +271,10 @@ export class PrPlayer {
   /**
    * 初始化解码器
    */
-  private initDecoder = () => {
+  private initDecoder = (pattern: Pattern) => {
     this.decoderWorker = new DecoderWorker()
+    this.decoderWorker.init(pattern)
+
     this.decoderWorker.on.audio.decode = (audio) => {
       this.audioPlayer?.push(audio)
       this.on.decoder.audio && this.on.decoder.audio(audio)
@@ -350,7 +349,6 @@ export class PrPlayer {
     parse: async (value: AllowSharedBufferSource) => {
       const textDecoder = new TextDecoder('utf-8') // 指定编码格式
       const playlistText = textDecoder.decode(value)
-
       const lines = playlistText.split('\n').map((item) => item.replace('\r', ''))
 
       const baseUrl = this.url.substring(0, this.url.lastIndexOf('/') + 1)

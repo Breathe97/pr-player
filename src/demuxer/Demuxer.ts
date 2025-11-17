@@ -2,8 +2,7 @@ import { Cacher } from './Cacher'
 import type { Chunk } from './Cacher'
 import { ParseTS } from './ts264Parser'
 import { ParseFLV } from './flv264Parser'
-
-export type Pattern = 'hls' | 'dash' | 'rtmp' | 'flv'
+import { Pattern } from '../type'
 
 export interface AudioConfig {
   kind: 'audio'
