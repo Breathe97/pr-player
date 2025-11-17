@@ -74,9 +74,7 @@ export class Decoder {
       if (!this.lastRenderTime) {
         this.lastRenderTime = now
       }
-
       this.fps = Math.round(1000 / (now - this.lastRenderTime))
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: this.fps`, this.fps)
     }
 
     this.lastRenderTime = now // 上一次帧 渲染时间
@@ -125,10 +123,10 @@ export class Decoder {
         }
       }
 
-      // {
-      //   const { decodingSpeed, decodingSpeedRatio, fps } = this
-      //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: decode`, { fps, decodingSpeed, decodingSpeedRatio, cacheLength })
-      // }
+      if (this.on.debug) {
+        const { decodingSpeed, decodingSpeedRatio, fps } = this
+        this.on.debug({ decodingSpeed, decodingSpeedRatio, fps })
+      }
 
       if (!chunk) break
       const { type, init } = chunk

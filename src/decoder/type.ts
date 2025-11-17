@@ -7,6 +7,7 @@ export interface On {
     decode?: (_frame: { bitmap: ImageBitmap; timestamp: number }) => void
     error?: (_e: DOMException) => void
   }
+  debug?: (_e: any) => void
 }
 
 interface PendingAudioChunk {

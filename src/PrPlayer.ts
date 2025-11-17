@@ -275,6 +275,12 @@ export class PrPlayer {
     this.decoderWorker = new DecoderWorker()
     this.decoderWorker.init(pattern)
 
+    this.decoderWorker.on.debug = (debug) => {
+      if (this.option.debug) {
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: debug`, debug)
+      }
+    }
+
     this.decoderWorker.on.audio.decode = (audio) => {
       this.audioPlayer?.push(audio)
       this.on.decoder.audio && this.on.decoder.audio(audio)
