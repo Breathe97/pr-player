@@ -1,4 +1,4 @@
-import { Pattern } from '../type'
+import type { Pattern } from '../type'
 import type { On, PendingChunk } from './type'
 
 export class Decoder {

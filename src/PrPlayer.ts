@@ -7,7 +7,7 @@ import { getFormatFromUrlPattern, stopStream, createStreamGenerator } from './to
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/264Parser'
 import { PrFetch } from 'pr-fetch'
-import { Pattern } from './type'
+import type { Pattern } from './type'
 
 interface On {
   demuxer: {
