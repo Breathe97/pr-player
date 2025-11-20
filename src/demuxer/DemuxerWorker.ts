@@ -12,17 +12,17 @@ export class DemuxerWorker {
       const { action, data } = e.data
 
       switch (action) {
-        case 'onInfo':
+        case 'on.info':
           this.on.info && this.on.info(data)
           break
-        case 'onConfig':
+        case 'on.config':
           this.on.config && this.on.config(data)
           break
-        case 'onDebug':
-          this.on.debug && this.on.debug(data)
-          break
-        case 'onChunk':
+        case 'on.chunk':
           this.on.chunk && this.on.chunk(data)
+          break
+        case 'on.debug':
+          this.on.debug && this.on.debug(data)
           break
       }
     }

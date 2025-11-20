@@ -2,7 +2,7 @@ import { Render } from './Render'
 
 interface WorkerMessage {
   action: 'init' | 'push' | 'setCut' | 'setPause' | 'destroy'
-  data: any
+  data: never
 }
 
 const render = new Render()

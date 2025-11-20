@@ -14,11 +14,11 @@ interface On {
     info?: (_info: any) => void
     config?: (_config: any) => void
     chunk?: (_chunk: any) => void
-    sei?: (_payload: Uint8Array) => void
   }
   decoder: {
     audio?: (_audio: { audioData: AudioData; playbackRate?: number }) => void
     video?: (_frame: { timestamp: number; bitmap: ImageBitmap }) => void
+    sei?: (_payload: Uint8Array) => void
   }
   error?: (_e: any) => void
 }
@@ -222,13 +222,13 @@ export class PrPlayer {
         case 'audio':
           {
             const { codec, sampleRate, numberOfChannels } = config
-            this.decoderWorker?.audio.init({ codec, sampleRate, numberOfChannels })
+            this.decoderWorker?.initAudio({ codec, sampleRate, numberOfChannels })
           }
           break
         case 'video':
           {
             const { codec, description } = config
-            this.decoderWorker?.video.init({ codec, description })
+            this.decoderWorker?.initVideo({ codec, description })
           }
           break
       }
@@ -243,8 +243,8 @@ export class PrPlayer {
         case 'audio':
           {
             const { type, dts, data } = chunk
-            const timestamp = dts * 1
-            this.decoderWorker.audio.push({ type, timestamp, data })
+            const timestamp = dts * 1000
+            this.decoderWorker.push({ kind, init: { type, timestamp, data } })
           }
           break
         case 'video':
@@ -252,16 +252,7 @@ export class PrPlayer {
             const { type, dts, data, nalus = [] } = chunk
 
             const timestamp = dts * 1000
-            this.decoderWorker.video.push({ type, timestamp, data })
-            for (const nalu of nalus) {
-              if (nalu.byteLength <= 4) continue
-              const { header, data } = parseNalu(nalu)
-              const { nal_unit_type } = header
-              // 解析SEI
-              if (nal_unit_type === 6) {
-                this.on.demuxer.sei && this.on.demuxer.sei(data)
-              }
-            }
+            this.decoderWorker.push({ kind, init: { type, timestamp, data }, nalus })
           }
           break
       }
@@ -275,9 +266,9 @@ export class PrPlayer {
     this.decoderWorker = new DecoderWorker()
     this.decoderWorker.init(pattern)
 
-    this.decoderWorker.on.debug = (debug) => {
+    this.decoderWorker.on.debug = (e) => {
       if (this.option.debug) {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: debug`, debug)
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: debug`, e)
       }
     }
 
@@ -301,9 +292,22 @@ export class PrPlayer {
       this.on.decoder.video && this.on.decoder.video(frame)
       frame.bitmap.close()
     }
+
     this.decoderWorker.on.video.error = (e) => {
       this.stop()
       this.on.error && this.on.error(e)
+    }
+
+    this.decoderWorker.on.nalus = async (nalus) => {
+      for (const nalu of nalus) {
+        if (nalu.byteLength <= 4) continue
+        const { header, data } = parseNalu(nalu)
+        const { nal_unit_type } = header
+        // 解析SEI
+        if (nal_unit_type === 6) {
+          this.on.decoder.sei && this.on.decoder.sei(data)
+        }
+      }
     }
   }
 

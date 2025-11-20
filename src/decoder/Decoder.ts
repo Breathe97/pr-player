@@ -15,6 +15,7 @@ export class Decoder {
   private baseTime = 0 // ms
 
   private pendingChunks: PendingChunk[] = []
+  private currentChunk?: PendingChunk
 
   private isProcessing = false
 
@@ -42,6 +43,7 @@ export class Decoder {
 
   private maxDecodingSpeedRatio = 2
 
+  private frameStartTime?: number // 帧开始时间 用于校准最终渲染时间
   private lastRenderTime?: number // 上一次渲染的时间
   private nextRenderTime?: number // 下一次渲染的时间
 
@@ -56,11 +58,66 @@ export class Decoder {
     this.initDecodeInterval()
   }
 
+  initAudio = (config: AudioDecoderConfig) => {
+    this.audio.destroy()
+    this.audioDecoderConfig = { ...config }
+    this.audioDecoder = new AudioDecoder({
+      output: (audioData: AudioData) => {
+        const playbackRate = this.decodingSpeedRatio
+        this.on.audio.decode && this.on.audio.decode({ audioData, playbackRate })
+      },
+      error: (e) => {
+        this.on.audio.error && this.on.audio.error(e)
+      }
+    })
+    this.audioDecoder.configure(this.audioDecoderConfig)
+  }
+
+  initVideo = (config: VideoDecoderConfig) => {
+    this.video.destroy()
+    this.videoDecoderConfig = { ...config }
+    this.videoDecoder = new VideoDecoder({
+      output: async (frame: VideoFrame) => {
+        if (!this.frameStartTime) {
+          this.frameStartTime = frame.timestamp
+        }
+        // 修正时间戳为真实的本地绝对时间
+        const timestamp = frame.timestamp - this.frameStartTime + this.baseTime * 1000
+        const bitmap = await createImageBitmap(frame)
+        frame.close()
+        if (bitmap.width > 0 && bitmap.height > 0) {
+          this.on.video.decode && this.on.video.decode({ timestamp, bitmap })
+
+          // 返回对应的 nalus
+          if (this.currentChunk && this.currentChunk.kind === 'video' && this.currentChunk.nalus) {
+            this.on.nalus && this.on.nalus(this.currentChunk.nalus)
+          }
+        } else {
+          bitmap.close()
+        }
+      },
+      error: (e) => {
+        this.on.video.error && this.on.video.error(e)
+      }
+    })
+    this.videoDecoder.configure(this.videoDecoderConfig)
+  }
+
   setFrameTrack = (frameTrack: boolean) => {
     this.frameTrack = frameTrack
     if (this.frameTrack === false) {
       this.decodingSpeedRatio = 1
     }
+  }
+
+  push = (chunk: PendingChunk) => {
+    this.pendingChunks.push(chunk)
+  }
+
+  destroy = () => {
+    this.audio.destroy()
+    this.video.destroy()
+    clearInterval(this.decodeTimer)
   }
 
   private initDecodeInterval = () => {
@@ -97,7 +154,7 @@ export class Decoder {
     if (this.isProcessing === true) return
     this.isProcessing = true
     while (true) {
-      const chunk = this.pendingChunks.shift()
+      this.currentChunk = this.pendingChunks.shift()
 
       const cacheLength = this.pendingChunks.length
 
@@ -125,13 +182,13 @@ export class Decoder {
 
       if (this.on.debug) {
         const { decodingSpeed, decodingSpeedRatio, fps } = this
-        this.on.debug({ decodingSpeed, decodingSpeedRatio, fps })
+        this.on.debug({ decodingSpeed, decodingSpeedRatio, fps, cacheLength })
       }
 
-      if (!chunk) break
-      const { type, init } = chunk
+      if (!this.currentChunk) break
+      const { kind, init } = this.currentChunk
 
-      switch (type) {
+      switch (kind) {
         case 'audio':
           {
             this.decodeAudio(init)
@@ -144,7 +201,7 @@ export class Decoder {
           break
       }
 
-      if (type === 'video') break
+      if (kind === 'video') break
     }
     this.isProcessing = false
   }
@@ -175,31 +232,7 @@ export class Decoder {
     }
   }
 
-  destroy = () => {
-    this.audio.destroy()
-    this.video.destroy()
-    clearInterval(this.decodeTimer)
-  }
-
-  audio = {
-    init: (config: AudioDecoderConfig) => {
-      this.audio.destroy()
-      this.audioDecoderConfig = { ...config }
-      this.audioDecoder = new AudioDecoder({
-        output: (audioData: AudioData) => {
-          const playbackRate = this.decodingSpeedRatio
-          this.on.audio.decode && this.on.audio.decode({ audioData, playbackRate })
-        },
-        error: (e) => {
-          this.on.audio.error && this.on.audio.error(e)
-        }
-      })
-
-      this.audioDecoder.configure(this.audioDecoderConfig)
-    },
-    push: (init: EncodedAudioChunkInit) => {
-      this.pendingChunks.push({ type: 'audio', init })
-    },
+  private audio = {
     flush: () => {
       this.audioDecoder?.flush()
     },
@@ -210,31 +243,7 @@ export class Decoder {
     }
   }
 
-  video = {
-    init: (config: VideoDecoderConfig) => {
-      this.video.destroy()
-      this.videoDecoderConfig = { ...config }
-      this.videoDecoder = new VideoDecoder({
-        output: async (frame: VideoFrame) => {
-          // 修正时间戳为真实的本地绝对时间
-          const timestamp = frame.timestamp + this.baseTime * 1000
-          const bitmap = await createImageBitmap(frame)
-          frame.close()
-          if (bitmap.width > 0 && bitmap.height > 0) {
-            this.on.video.decode && this.on.video.decode({ timestamp, bitmap })
-          } else {
-            bitmap.close()
-          }
-        },
-        error: (e) => {
-          this.on.video.error && this.on.video.error(e)
-        }
-      })
-      this.videoDecoder.configure(this.videoDecoderConfig)
-    },
-    push: (init: EncodedVideoChunkInit) => {
-      this.pendingChunks.push({ type: 'video', init })
-    },
+  private video = {
     flush: () => {
       this.videoDecoder?.flush()
     },

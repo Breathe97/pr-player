@@ -33,9 +33,6 @@ const player = new PrPlayer({ debug: true })
   player.on.demuxer.chunk = (chunk) => {
     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
   }
-  player.on.demuxer.sei = (sei) => {
-    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, sei)
-  }
 }
 
 // 如果你只需要解码器相关的能力 可以拿到解码后的所有回调
@@ -45,6 +42,9 @@ const player = new PrPlayer({ debug: true })
   }
   player.on.decoder.video = (video) => {
     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
+  }
+  player.on.decoder.sei = (sei) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: sei`, sei)
   }
 }
 
