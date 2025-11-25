@@ -36,10 +36,9 @@ export class Demuxer {
 
   private offset = 0
 
-  public on: On = {}
-
   private parser: ParseFLV | ParseTS | undefined
 
+  public on: On = {}
   constructor() {}
 
   init = (pattern: Pattern) => {

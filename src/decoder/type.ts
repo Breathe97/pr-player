@@ -8,7 +8,7 @@ export interface On {
     error?: (_e: DOMException) => void
   }
   nalus?: (nalus: Uint8Array<ArrayBufferLike>[]) => void
-  debug?: (_e: any) => void
+  analysis?: (_e: any) => void
 }
 
 interface PendingAudioChunk {

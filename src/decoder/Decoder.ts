@@ -186,9 +186,9 @@ export class Decoder {
         }
       }
 
-      if (this.on.debug) {
+      if (this.on.analysis) {
         const { decodingSpeed, decodingSpeedRatio, fps } = this
-        this.on.debug({ decodingSpeed, decodingSpeedRatio, fps, cacheLength })
+        this.on.analysis({ decodingSpeed, decodingSpeedRatio, fps, cacheLength })
       }
 
       if (!this.currentChunk) break

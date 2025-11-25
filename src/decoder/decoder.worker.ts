@@ -12,8 +12,9 @@ decoder.on.audio.error = (data) => postMessage({ action: 'on.audio.error', data 
 
 decoder.on.video.decode = (data) => postMessage({ action: 'on.video.decode', data })
 decoder.on.video.error = (data) => postMessage({ action: 'on.video.error', data })
+
 decoder.on.nalus = (data) => postMessage({ action: 'on.nalus', data })
-decoder.on.debug = (data) => postMessage({ action: 'on.debug', data })
+decoder.on.analysis = (data) => postMessage({ action: 'on.analysis', data })
 
 onmessage = (event: MessageEvent<WorkerMessage>) => {
   const { action, data } = event.data

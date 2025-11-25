@@ -19,6 +19,7 @@ interface On {
     audio?: (_audio: { audioData: AudioData; playbackRate?: number }) => void
     video?: (_frame: { timestamp: number; bitmap: ImageBitmap }) => void
     sei?: (_payload: Uint8Array) => void
+    analysis?: (_e: any) => void
   }
   debug?: (_e: any) => void
   error?: (_e: any) => void
@@ -270,12 +271,6 @@ export class PrPlayer {
     const { frameTrack = false } = this.option
     this.decoderWorker.setFrameTrack(frameTrack)
 
-    this.decoderWorker.on.debug = (e) => {
-      if (this.option.debug) {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: debug`, e)
-      }
-    }
-
     this.decoderWorker.on.audio.decode = (audio) => {
       this.audioPlayer?.push(audio)
       this.on.decoder.audio && this.on.decoder.audio(audio)
@@ -312,6 +307,10 @@ export class PrPlayer {
           this.on.decoder.sei && this.on.decoder.sei(data)
         }
       }
+    }
+
+    this.decoderWorker.on.analysis = (e) => {
+      this.on.decoder.analysis && this.on.decoder.analysis(e)
     }
   }
 

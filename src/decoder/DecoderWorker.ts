@@ -27,8 +27,8 @@ export class DecoderWorker {
         case 'on.nalus':
           this.on.nalus && this.on.nalus(data)
           break
-        case 'on.debug':
-          this.on.debug && this.on.debug(data)
+        case 'on.analysis':
+          this.on.analysis && this.on.analysis(data)
           break
       }
     }
