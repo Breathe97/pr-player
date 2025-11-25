@@ -37,6 +37,8 @@ export class PrPlayer {
   }
 
   private prFetch = new PrFetch()
+  private getSegmentsFetch = new PrFetch()
+
   private prResolves = new PrResolves()
 
   private url: string = ''
@@ -67,7 +69,7 @@ export class PrPlayer {
    * @param url : string
    */
   start = async (url: string) => {
-    this.stop()
+    await this.stop()
     this.url = url
 
     const pattern = getFormatFromUrlPattern(url)
@@ -92,8 +94,10 @@ export class PrPlayer {
    */
   stop = async () => {
     try {
+      this.url = ''
       clearInterval(this.hls.getSegmentsTimer)
       this.prFetch.stop()
+      this.getSegmentsFetch.stop()
     } catch (error) {
       console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: error`, error)
     }
@@ -344,7 +348,7 @@ export class PrPlayer {
           if (value) {
             this.demuxerWorker?.push(value)
           }
-          if (done) break // 读取完成
+          if (done || this.url === '') break // 读取完成
         }
       } catch (error: any) {
         if (error?.name !== 'AbortError') throw Error(error)
@@ -390,15 +394,14 @@ export class PrPlayer {
     },
     getSegments: async () => {
       try {
-        const prFetch = new PrFetch()
-        let res = await prFetch.request(this.url)
+        let res = await this.getSegmentsFetch.request(this.url)
         if (res.status !== 200) {
           await new Promise((resolve) => setTimeout(() => resolve(true), 500))
-          res = await prFetch.request(this.url)
+          res = await this.getSegmentsFetch.request(this.url)
         }
         if (res.status !== 200) {
           await new Promise((resolve) => setTimeout(() => resolve(true), 500))
-          res = await prFetch.request(this.url)
+          res = await this.getSegmentsFetch.request(this.url)
         }
         if (res.status !== 200) throw new Error('request is error.')
         const reader = res.body?.getReader()
@@ -420,7 +423,7 @@ export class PrPlayer {
             }
             this.hls.urls = urls
           }
-          if (done) break // 读取完成
+          if (done || this.url === '') break // 读取完成
         }
       } catch (error) {
         this.on.error && this.on.error(error)
@@ -449,7 +452,7 @@ export class PrPlayer {
               if (value) {
                 this.demuxerWorker?.push(value)
               }
-              if (done) break // 读取完成
+              if (done || this.url === '') break // 读取完成
             }
           } else {
             await new Promise((resolve) => setTimeout(() => resolve(true), 300))
