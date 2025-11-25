@@ -38,10 +38,11 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
+  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_1234567890/1764052786653.flv?auth_key=1764139186-0-0-346bab18d8c1d7a54657b0e09786b1aa' },
   { label: 'flv-dy', value: 'https://pull-flv-f26.douyincdn.com/media/stream-694756842122773164.flv?arch_hrchy=w1&exp_hrchy=w1&expire=691af268&major_anchor_level=common&sign=51f8fb2c71a08a2f3af39d0b1f8d2284&t_id=037-20251110180112976F2FEA428EC19DFCFC-7nVaOR&unique_id=stream-694756842122773164_684_flv&_session_id=082-2025111018011269263710326FAD4B7EA8.1762768872692.60052&rsi=0&abr_pts=-800' },
-  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_5564094315/1763605928988.flv?auth_key=1763692328-0-0-c42f0978280e3d2e2eb0205fff4e0aaf' },
+
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_5564094315/1763605928988.m3u8?auth_key=1763692328-0-0-5f42eea1826ec6f039809f5bb2523ef0' },
+  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_1234567890/1764052786653.m3u8?auth_key=1764139186-0-0-315d20cbd0450f662b4c4eabc6cf969d' },
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
@@ -82,9 +83,9 @@ const videoInfo = ref()
   // player.on.decoder.video = (video) => {
   //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
   // }
-  // player.on.decoder.analysis = (e) => {
-  //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: analysis`, e)
-  // }
+  player.on.decoder.analysis = (e) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: analysis`, e)
+  }
 }
 
 const frame_track = ref(false)
