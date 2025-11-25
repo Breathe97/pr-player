@@ -293,7 +293,6 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.error = (e) => {
-      this.stop()
       this.on.error && this.on.error(e)
     }
 
