@@ -1,0 +1,13 @@
+{
+  "servers": [
+    {
+      "name": "PR云",
+      "host": "pryun.vip",
+      "port": 21,
+      "username": "demos",
+      "password": "demos.pryun.vip",
+      "workspacePath": "/",
+      "remotePath": "/"
+    }
+  ]
+}
