@@ -27,21 +27,21 @@ export class Decoder {
 
   private fameTrackOption: { [key in Pattern]: [number, number] } = {
     // [停止追帧, 开启追帧]
-    flv: [20, 50],
+    flv: [30, 50],
     hls: [200, 300],
     dash: [50, 100],
     rtmp: [50, 100]
   }
 
+  private decodingSpeedRatio = 1 // 解码速率
+
+  private maxDecodingSpeedRatio = 2 // 最大解码速率
+
   private decodingSpeed = 16 // ms
   private fps = 0 // 实时渲染fps
 
-  private firstVideoChunkTimestamp?: number
-  private secondVideoChunkTimestamp?: number
-
-  private decodingSpeedRatio = 1
-
-  private maxDecodingSpeedRatio = 2
+  private firstVideoChunkTimestamp?: number // 第一帧时间戳
+  private secondVideoChunkTimestamp?: number // 第二帧时间戳
 
   private frameStartTime?: number // 帧开始时间 用于校准最终渲染时间
   private lastRenderTime?: number // 上一次渲染的时间
@@ -117,6 +117,12 @@ export class Decoder {
   destroy = () => {
     this.audio.destroy()
     this.video.destroy()
+    this.pendingChunks = []
+    this.firstVideoChunkTimestamp = undefined
+    this.secondVideoChunkTimestamp = undefined
+    this.frameStartTime = undefined
+    this.lastRenderTime = undefined
+    this.nextRenderTime = undefined
     clearInterval(this.decodeTimer)
   }
 

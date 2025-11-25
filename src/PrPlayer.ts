@@ -20,6 +20,7 @@ interface On {
     video?: (_frame: { timestamp: number; bitmap: ImageBitmap }) => void
     sei?: (_payload: Uint8Array) => void
   }
+  debug?: (_e: any) => void
   error?: (_e: any) => void
 }
 
@@ -198,9 +199,9 @@ export class PrPlayer {
     this.demuxerWorker = new DemuxerWorker()
     this.demuxerWorker.init(pattern)
 
-    this.demuxerWorker.on.debug = (debug) => {
+    this.demuxerWorker.on.debug = (e) => {
       if (this.option.debug) {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: debug`, debug)
+        this.on.debug && this.on.debug(e)
       }
     }
 
