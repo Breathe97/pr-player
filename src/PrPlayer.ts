@@ -132,6 +132,7 @@ export class PrPlayer {
    * @param frameTrack?: boolean
    */
   setFrameTrack = (frameTrack: boolean) => {
+    this.option.frameTrack = frameTrack
     this.decoderWorker?.setFrameTrack(frameTrack)
   }
 
@@ -266,6 +267,8 @@ export class PrPlayer {
   private initDecoder = (pattern: Pattern) => {
     this.decoderWorker = new DecoderWorker()
     this.decoderWorker.init(pattern)
+    const { frameTrack = false } = this.option
+    this.decoderWorker.setFrameTrack(frameTrack)
 
     this.decoderWorker.on.debug = (e) => {
       if (this.option.debug) {
