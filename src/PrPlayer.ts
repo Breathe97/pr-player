@@ -46,7 +46,7 @@ export class PrPlayer {
   private demuxerWorker: DemuxerWorker | undefined
   private decoderWorker: DecoderWorker | undefined
 
-  private audioPlayer: AudioPlayer | undefined
+  public audioPlayer: AudioPlayer | undefined
 
   private renderWorker: RenderWorker | undefined
 
