@@ -128,8 +128,6 @@ const play = async () => {
   }
 }
 
-play()
-
 const cut = () => {
   cut_pause.value = false
   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: videoInfo.value `, videoInfo.value)
