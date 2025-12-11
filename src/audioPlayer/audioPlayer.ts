@@ -75,46 +75,42 @@ export class AudioPlayer {
 
   async push(audio: { audioData: AudioData; playbackRate?: number }) {
     const { audioData, playbackRate = 1 } = audio
-    try {
-      if (!this.audioContext) return
-      if (!this.destination) return
+    if (!this.audioContext) return
+    if (!this.destination) return
 
-      // 1. 转换 AudioData 为 AudioBuffer
-      let audioBuffer = await convertToAudioBuffer(this.audioContext, audioData)
+    // 1. 转换 AudioData 为 AudioBuffer
+    let audioBuffer = await convertToAudioBuffer(this.audioContext, audioData)
+    audioData.close()
+    if (!audioBuffer) return
 
-      if (!audioBuffer) return
+    // 2. 创建播放源
+    const source = this.audioContext.createBufferSource()
+    source.buffer = audioBuffer
+    source.playbackRate.value = playbackRate // 设置播放速率
 
-      // 2. 创建播放源
-      const source = this.audioContext.createBufferSource()
-      source.buffer = audioBuffer
-      source.playbackRate.value = playbackRate // 设置播放速率
+    // 使用更精确的detune计算
+    const exactDetune = -1200 * Math.log2(playbackRate)
+    source.detune.value = exactDetune
 
-      // 使用更精确的detune计算
-      const exactDetune = -1200 * Math.log2(playbackRate)
-      source.detune.value = exactDetune
+    source.connect(this.destination)
 
-      source.connect(this.destination)
+    // 3. 计算精确播放时间（考虑播放速率）
+    const startTime = Math.max(this.nextStartTime, this.audioContext.currentTime)
+    const actualDuration = audioBuffer.duration / playbackRate // 实际播放时长
+    this.nextStartTime = startTime + actualDuration
 
-      // 3. 计算精确播放时间（考虑播放速率）
-      const startTime = Math.max(this.nextStartTime, this.audioContext.currentTime)
-      const actualDuration = audioBuffer.duration / playbackRate // 实际播放时长
-      this.nextStartTime = startTime + actualDuration
+    // 4. 调度播放
+    source.start(startTime)
+    this.pendingSources.push(source)
 
-      // 4. 调度播放
-      source.start(startTime)
-      this.pendingSources.push(source)
+    // 5. 自动清理
+    source.onended = () => {
+      this.pendingSources = this.pendingSources.filter((s) => s !== source)
+    }
 
-      // 5. 自动清理
-      source.onended = () => {
-        this.pendingSources = this.pendingSources.filter((s) => s !== source)
-      }
-
-      // 6. 处理首次播放
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume()
-      }
-    } finally {
-      audioData.close()
+    // 6. 处理首次播放
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume()
     }
   }
 
