@@ -83,7 +83,7 @@ const videoInfo = ref()
   // player.on.decoder.video = (video) => {
   //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
   // }
-  player.on.decoder.analysis = (e) => {
+  player.on.decoder.analysis = () => {
     // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: analysis`, e)
   }
 }
