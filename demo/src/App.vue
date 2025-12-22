@@ -46,7 +46,7 @@ const url_options = [
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
-const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv-live')
+const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv')
 
 const url = ref('')
 
@@ -83,8 +83,8 @@ const videoInfo = ref()
   // player.on.decoder.video = (video) => {
   //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
   // }
-  player.on.decoder.analysis = () => {
-    // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: analysis`, e)
+  player.on.decoder.analysis = (_e) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: analysis`, _e)
   }
 }
 

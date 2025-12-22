@@ -161,6 +161,7 @@ export class Decoder {
     this.isProcessing = true
     while (true) {
       this.currentChunk = this.pendingChunks.shift()
+      if (!this.currentChunk) break
 
       const cacheLength = this.pendingChunks.length
 
@@ -191,7 +192,6 @@ export class Decoder {
         this.on.analysis({ decodingSpeed, decodingSpeedRatio, fps, cacheLength })
       }
 
-      if (!this.currentChunk) break
       const { kind, init } = this.currentChunk
 
       switch (kind) {

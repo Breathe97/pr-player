@@ -43,6 +43,8 @@ export class PrPlayer {
 
   private url: string = ''
 
+  private p2pPayloads: Uint8Array[] = [] // 所有原始分段数据
+
   private demuxerWorker: DemuxerWorker | undefined
   private decoderWorker: DecoderWorker | undefined
 
@@ -131,6 +133,14 @@ export class PrPlayer {
    * @param state?: boolean
    */
   setMute = (state?: boolean) => this.audioPlayer?.prAudioStream?.setMute(state)
+
+  /**
+   * 设置输出音量
+   * @param gain
+   */
+  setOutputGain = (gain: number) => {
+    this.audioPlayer?.prAudioStream?.setOutputGain(gain)
+  }
 
   /**
    * 是否开启追帧

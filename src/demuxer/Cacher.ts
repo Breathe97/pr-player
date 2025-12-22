@@ -11,7 +11,7 @@ export interface Chunk {
 export class Cacher {
   private pendingPayloads: Uint8Array[] = [] // 所有原始分段数据
   private payload = new Uint8Array(0) // 当前正在复解的原始数据
-  private chunks: any[] = [] // 复解后的数据 用于p2p传输或重播使用
+  private chunks: any[] = [] // 复解后的数据 用于重播使用
 
   push = (payload: Uint8Array) => {
     this.pendingPayloads.push(payload)
@@ -37,7 +37,7 @@ export class Cacher {
 
   pushChunk = (chunk: any) => {
     this.chunks.push(chunk)
-    if (this.chunks.length > 1000) {
+    if (this.chunks.length > 100) {
       this.chunks.shift()
     }
     // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunks`, this.chunks.length)
