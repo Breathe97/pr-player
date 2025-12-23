@@ -266,7 +266,6 @@ export class PrPlayer {
         case 'video':
           {
             const { type, dts, data, nalus = [] } = chunk
-
             const timestamp = dts * 1000
             this.decoderWorker.push({ kind, init: { type, timestamp, data }, nalus })
           }
