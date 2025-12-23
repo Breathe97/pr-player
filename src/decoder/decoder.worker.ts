@@ -7,7 +7,8 @@ interface WorkerMessage {
 
 const decoder = new Decoder()
 
-decoder.on.audio.decode = (data) => postMessage({ action: 'on.audio.decode', data })
+// @ts-ignore
+decoder.on.audio.decode = (data) => postMessage({ action: 'on.audio.decode', data }, [data.audioData])
 decoder.on.audio.error = (data) => postMessage({ action: 'on.audio.error', data })
 
 // @ts-ignore

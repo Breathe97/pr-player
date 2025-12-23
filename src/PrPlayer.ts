@@ -1,6 +1,5 @@
 import { DemuxerWorker } from './demuxer/DemuxerWorker'
 import { DecoderWorker } from './decoder/DecoderWorker'
-// import { Decoder as DecoderWorker } from './decoder/Decoder'
 import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
@@ -261,7 +260,7 @@ export class PrPlayer {
           {
             const { type, dts, data } = chunk
             const timestamp = dts * 1000
-            // this.decoderWorker.push({ kind, init: { type, timestamp, data } })
+            this.decoderWorker.push({ kind, init: { type, timestamp, data } })
           }
           break
         case 'video':
@@ -296,9 +295,6 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.decode = async (frame) => {
-      // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: frame`, frame)
-      // frame.bitmap.close()
-      // return
       if (this.start_resolve) {
         this.start_resolve(true)
         this.start_resolve = undefined
