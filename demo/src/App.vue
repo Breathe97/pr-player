@@ -39,7 +39,11 @@ import { PrPlayer } from '../../src/index'
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
   { label: 'flv-live', value: 'https://pull.pryun.vip/stream_4627451267/1765432331029.flv?auth_key=1765518731-0-0-bf7549bd8feea7566946d2a5ea33fe3a' },
-  { label: 'flv-dy', value: 'https://pull-flv-f26.douyincdn.com/media/stream-694756842122773164.flv?arch_hrchy=w1&exp_hrchy=w1&expire=691af268&major_anchor_level=common&sign=51f8fb2c71a08a2f3af39d0b1f8d2284&t_id=037-20251110180112976F2FEA428EC19DFCFC-7nVaOR&unique_id=stream-694756842122773164_684_flv&_session_id=082-2025111018011269263710326FAD4B7EA8.1762768872692.60052&rsi=0&abr_pts=-800' },
+  {
+    label: 'flv-dy',
+    value:
+      'https://v23aamqnzch6sm43unthes3exvguvil8v.mobgslb.tbcache.com/pull-f3.douyincdn.com/media/stream-118480348615017132.flv?rsi=1&major_anchor_level=common&abr_pts=-800&unique_id=stream-118480348615017132_684_flv&arch_hrchy=w1&t_id=037-202512231508056044D30C3EB64271698C-EdrmE2&exp_hrchy=w1&auth_key=1767076685-0-0-9240cb267bfeca1faf6189d7a2c6759f&_session_id=037-202512231508056044D30C3EB64271698C-EdrmE2.1766473685643.24745&ali_302c=701&ali_dispatch_cold_stream=on&ali_redirect_ex_hot=66666101&ali_stream_type=01&ali_orig_station=cn8234&ali_st=cn7489&ali_pv=1766473658&ali_ts=1766473686&ali_g=t51'
+  },
 
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
   { label: 'hls-live', value: 'https://pull.pryun.vip/stream_1234567890/1764052786653.m3u8?auth_key=1764139186-0-0-315d20cbd0450f662b4c4eabc6cf969d' },
@@ -84,7 +88,7 @@ const videoInfo = ref()
   //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: video`, video)
   // }
   player.on.decoder.analysis = (_e) => {
-    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: analysis`, _e)
+    // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: analysis`, _e)
   }
 }
 
@@ -112,19 +116,22 @@ const stop = () => {
 
 const play = async () => {
   pause.value = false
-  await player.start(url.value)
-  player.setMute(false)
-
-  const stream = player.getStream()
-  if (stream) {
-    const dom = document.querySelector('#canvas-video-stream-view')
-    const view = document.createElement('video')
-    view.style.objectFit = 'cover'
-    view.style.width = '100%'
-    view.style.height = '100%'
-    view.srcObject = stream
-    view.play()
-    dom?.replaceChildren(view)
+  try {
+    await player.start(url.value)
+    player.setMute(false)
+    const stream = player.getStream()
+    if (stream) {
+      const dom = document.querySelector('#canvas-video-stream-view')
+      const view = document.createElement('video')
+      view.style.objectFit = 'cover'
+      view.style.width = '100%'
+      view.style.height = '100%'
+      view.srcObject = stream
+      view.play()
+      dom?.replaceChildren(view)
+    }
+  } catch (error) {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
   }
 }
 

@@ -45,6 +45,7 @@ export class ParseFLV {
       const tagHeader = this.parseTagHeader(view, offset + 4) // previousTagSize(4)
 
       const { tagType, dataSize, timestamp: dts } = tagHeader
+
       if (tagType) {
         const tagBody = this.parseTagBody(tagType, view, offset + 4 + 11, dataSize) // previousTagSize(4) tagHeader(11)
 

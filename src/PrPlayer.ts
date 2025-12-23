@@ -42,8 +42,7 @@ export class PrPlayer {
   private prResolves = new PrResolves()
 
   private url: string = ''
-
-  private p2pPayloads: Uint8Array[] = [] // 所有原始分段数据
+  private start_resolve?: Function
 
   private demuxerWorker: DemuxerWorker | undefined
   private decoderWorker: DecoderWorker | undefined
@@ -297,6 +296,10 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.decode = async (frame) => {
+      if (this.start_resolve) {
+        this.start_resolve(true)
+        this.start_resolve = undefined
+      }
       this.renderWorker?.push(frame)
       const keys = [...this.cutRenders.keys()]
       for (const key of keys) {
@@ -338,32 +341,41 @@ export class PrPlayer {
   }
 
   private flv = {
-    start: async () => {
-      try {
-        let res = await this.prFetch.request(this.url)
-        if (res.status !== 200) {
-          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
-          res = await this.prFetch.request(this.url)
-        }
-        if (res.status !== 200) {
-          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
-          res = await this.prFetch.request(this.url)
-        }
-        if (res.status !== 200) throw new Error('request is error.')
-
-        const reader = res.body?.getReader()
-        if (!reader) throw new Error('reader is error.')
-        while (true) {
-          const { done, value } = await reader.read()
-          if (value) {
-            this.demuxerWorker?.push(value)
+    start: () => {
+      return new Promise(async (resolve, reject) => {
+        try {
+          this.start_resolve = resolve
+          let res
+          let count = 0
+          while (true) {
+            count += 1
+            try {
+              res = await this.prFetch.request(this.url)
+            } catch (error) {
+              console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
+            }
+            if (res?.status === 200 || count === 3) break
+            await new Promise((resolve) => setTimeout(() => resolve(true), 500))
           }
-          if (done || this.url === '') break // 读取完成
+
+          if (!res || res.status !== 200) return reject('request is error.')
+
+          const reader = res.body?.getReader()
+          if (!reader) return reject('reader is error.')
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (value) {
+              this.demuxerWorker?.push(value)
+            }
+            if (done || this.url === '') break // 读取完成
+          }
+        } catch (error: any) {
+          if (error.name !== 'AbortError') {
+            reject(error)
+          }
         }
-      } catch (error: any) {
-        if (error?.name !== 'AbortError') throw Error(error)
-        this.on.error && this.on.error(error)
-      }
+      })
     }
   }
 
@@ -404,16 +416,21 @@ export class PrPlayer {
     },
     getSegments: async () => {
       try {
-        let res = await this.getSegmentsFetch.request(this.url)
-        if (res.status !== 200) {
+        let res
+        let count = 0
+        while (true) {
+          count += 1
+          try {
+            res = await this.getSegmentsFetch.request(this.url)
+          } catch (error) {
+            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
+          }
+          if (res?.status === 200 || count === 3) break
           await new Promise((resolve) => setTimeout(() => resolve(true), 500))
-          res = await this.getSegmentsFetch.request(this.url)
         }
-        if (res.status !== 200) {
-          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
-          res = await this.getSegmentsFetch.request(this.url)
-        }
-        if (res.status !== 200) throw new Error('request is error.')
+
+        if (!res || res.status !== 200) throw new Error('request is error.')
+
         const reader = res.body?.getReader()
         if (!reader) throw new Error('reader is error.')
         while (true) {
@@ -427,6 +444,7 @@ export class PrPlayer {
               this.option.frameTrack = false
             }
             let urls = Array.from(segments, (item: any) => item.url)
+
             const index = urls.findIndex((url) => url === this.hls.url)
             if (index !== -1) {
               urls = urls.slice(index + 1)
@@ -435,42 +453,50 @@ export class PrPlayer {
           }
           if (done || this.url === '') break // 读取完成
         }
-      } catch (error) {
-        this.on.error && this.on.error(error)
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          this.on.error && this.on.error(error)
+        }
       }
     },
+    start: () => {
+      return new Promise(async (resolve, reject) => {
+        try {
+          this.start_resolve = resolve
+          this.hls.url = ''
+          this.hls.urls = []
+          await this.hls.getSegments()
+          this.hls.getSegmentsTimer = window.setInterval(this.hls.getSegments, 500)
+          if (this.hls.isLive === false) {
+            clearInterval(this.hls.getSegmentsTimer)
+            this.decoderWorker?.setFrameTrack(false) // 关闭追帧
+          }
 
-    start: async () => {
-      try {
-        await this.hls.getSegments()
-        this.hls.getSegmentsTimer = window.setInterval(this.hls.getSegments, 500)
-        if (this.hls.isLive === false) {
-          clearInterval(this.hls.getSegmentsTimer)
-          this.decoderWorker?.setFrameTrack(false) // 关闭追帧
-        }
+          while (true) {
+            const url = this.hls.urls.shift()
+            if (url) {
+              this.hls.url = url
+              const res = await this.prFetch.request(url)
+              const reader = res.body?.getReader()
+              if (!reader) throw new Error('segment reader is error.')
 
-        while (true) {
-          const url = this.hls.urls.shift()
-          if (url) {
-            this.hls.url = url
-            const res = await this.prFetch.request(url)
-            const reader = res.body?.getReader()
-            if (!reader) throw new Error('segment reader is error.')
-
-            while (true) {
-              const { done, value } = await reader.read()
-              if (value) {
-                this.demuxerWorker?.push(value)
+              while (true) {
+                const { done, value } = await reader.read()
+                if (value) {
+                  this.demuxerWorker?.push(value)
+                }
+                if (done || this.url === '') break // 读取完成
               }
-              if (done || this.url === '') break // 读取完成
+            } else {
+              await new Promise((resolve) => setTimeout(() => resolve(true), 300))
             }
-          } else {
-            await new Promise((resolve) => setTimeout(() => resolve(true), 300))
+          }
+        } catch (error: any) {
+          if (error.name !== 'AbortError') {
+            reject(error)
           }
         }
-      } catch (error: any) {
-        if (error?.name !== 'AbortError') throw Error(error)
-      }
+      })
     }
   }
 }
