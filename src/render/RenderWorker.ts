@@ -7,7 +7,7 @@ export class RenderWorker {
   constructor() {}
 
   init = ({ writable }: { writable: any }) => this.worker.postMessage({ action: 'init', data: { writable } }, [writable])
-  push = (frame: { timestamp: number; bitmap: ImageBitmap }) => this.worker.postMessage({ action: 'push', data: frame })
+  push = (frame: { timestamp: number; bitmap: ImageBitmap }) => this.worker.postMessage({ action: 'push', data: frame }, [frame.bitmap])
   setCut = async (cutOption: CutOption) => this.worker.postMessage({ action: 'setCut', data: cutOption })
   setPause = (pause: boolean) => this.worker.postMessage({ action: 'setPause', data: pause })
   destroy = () => {

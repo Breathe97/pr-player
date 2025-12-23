@@ -10,7 +10,8 @@ const decoder = new Decoder()
 decoder.on.audio.decode = (data) => postMessage({ action: 'on.audio.decode', data })
 decoder.on.audio.error = (data) => postMessage({ action: 'on.audio.error', data })
 
-decoder.on.video.decode = (data) => postMessage({ action: 'on.video.decode', data })
+// @ts-ignore
+decoder.on.video.decode = (data: { timestamp: number; bitmap: ImageBitmap }) => postMessage({ action: 'on.video.decode', data }, [data.bitmap])
 decoder.on.video.error = (data) => postMessage({ action: 'on.video.error', data })
 
 decoder.on.nalus = (data) => postMessage({ action: 'on.nalus', data })

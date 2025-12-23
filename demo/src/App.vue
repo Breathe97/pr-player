@@ -50,7 +50,7 @@ const url_options = [
   { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
 ]
 
-const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv')
+const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv-dy')
 
 const url = ref('')
 
