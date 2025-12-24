@@ -168,6 +168,13 @@ export class PrPlayer {
     },
 
     /**
+     * 设置剪切
+     */
+    setCut: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
+      this.renderWorker?.setCut({ key, cutOption })
+    },
+
+    /**
      * 获取媒体流
      */
     getStream: (key: string) => this.cutRenders.get(key)?.stream,
