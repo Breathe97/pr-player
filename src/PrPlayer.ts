@@ -164,6 +164,7 @@ export class PrPlayer {
       const stream = new MediaStream([trackGenerator])
       this.renderWorker?.addCut({ key, writable: trackGenerator.writable, option: cutOption })
       this.cutRenders.set(key, { stream })
+      return stream
     },
 
     /**
