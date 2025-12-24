@@ -8,52 +8,44 @@ export class Render {
   push = async (frame: { timestamp: number; bitmap: ImageBitmap }) => {
     const { timestamp } = frame
     const { bitmap } = frame
-    if (bitmap.height === 0 || bitmap.width === 0) {
-      return bitmap.close()
-    }
+    if (bitmap.height === 0 || bitmap.width === 0) return bitmap.close() // 异常数据跳过
+    try {
+      const cut_keys = [...this.renderMap.keys()]
+      for (const cut_key of cut_keys) {
+        const ins = this.renderMap.get(cut_key)
+        if (!ins) continue
+        const { pause = false, writer, offscreen, option } = ins
 
-    const cut_keys = [...this.renderMap.keys()]
-    for (const cut_key of cut_keys) {
-      const ins = this.renderMap.get(cut_key)
-      if (!ins) continue
-      const { pause = false, writer, offscreen, option } = ins
+        if (pause === true) continue // 已暂停
 
-      if (pause === true) continue // 已暂停
-
-      // 原画
-      if (cut_key === 'default' || !option) {
-        if (writer) {
-          const videoFrame = new VideoFrame(bitmap, { timestamp })
-          writer.write(videoFrame)
-          videoFrame.close() // 销毁动画帧数据
+        const rendering = (bitmap: ImageBitmap) => {
+          if (writer) {
+            const videoFrame = new VideoFrame(bitmap, { timestamp })
+            try {
+              videoFrame && writer.write(videoFrame)
+            } catch (error) {}
+            videoFrame.close() // 销毁动画帧数据
+          }
+          //
+          else if (offscreen) {
+            offscreen.width = bitmap.width
+            offscreen.height = bitmap.height
+            offscreen?.getContext('2d')?.drawImage(bitmap, 0, 0)
+          }
         }
-        //
-        else if (offscreen) {
-          offscreen.width = bitmap.width
-          offscreen.height = bitmap.height
-          offscreen?.getContext('2d')?.drawImage(bitmap, 0, 0)
-        }
-      }
 
-      // 裁剪
-      else {
-        const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = option
-        const newBitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
-        if (writer) {
-          const videoFrame = new VideoFrame(newBitmap, { timestamp })
-          newBitmap.close() // 销毁剪切后的原始帧数据
-          writer.write(videoFrame)
-          videoFrame.close() // 销毁剪切后的动画帧数据
+        // 原画
+        if (cut_key === 'default') {
+          rendering(bitmap)
         }
-        //
-        else if (offscreen) {
-          offscreen.width = newBitmap.width
-          offscreen.height = newBitmap.height
-          offscreen?.getContext('2d')?.drawImage(newBitmap, 0, 0)
-          newBitmap.close() // 销毁剪切后的原始帧数据
+        // 裁剪
+        else if (option) {
+          const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = option
+          const newBitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
+          rendering(newBitmap)
         }
       }
-    }
+    } catch (error) {}
     bitmap.close() // 销毁原始帧数据
   }
 

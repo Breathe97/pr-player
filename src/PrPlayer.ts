@@ -101,15 +101,15 @@ export class PrPlayer {
       clearInterval(this.hls.getSegmentsTimer)
       this.prFetch.stop()
       this.getSegmentsFetch.stop()
+      this.demuxerWorker?.destroy()
+      this.decoderWorker?.destroy()
+      this.renderWorker?.destroy()
+      this.cutRenders = new Map()
+      stopStream(this.stream)
+      this.audioPlayer?.destroy()
     } catch (error) {
       console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: error`, error)
     }
-    this.demuxerWorker?.destroy()
-    this.decoderWorker?.destroy()
-    this.renderWorker?.destroy()
-    this.cutRenders = new Map()
-    stopStream(this.stream)
-    this.audioPlayer?.destroy()
   }
 
   /**

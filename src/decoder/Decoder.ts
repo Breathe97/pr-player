@@ -81,19 +81,23 @@ export class Decoder {
         if (!this.frameStartTime) {
           this.frameStartTime = frame.timestamp
         }
-        // 修正时间戳为真实的本地绝对时间
-        const timestamp = frame.timestamp - this.frameStartTime + this.baseTime * 1000
-        const bitmap = await createImageBitmap(frame)
-        frame.close()
-        if (bitmap.width > 0 && bitmap.height > 0) {
+        try {
+          // 修正时间戳为真实的本地绝对时间
+          const timestamp = frame.timestamp - this.frameStartTime + this.baseTime * 1000
+          const bitmap = await createImageBitmap(frame)
+
+          frame.close()
+
+          if (!bitmap.width || !bitmap.height) return bitmap.close() // 异常数据 跳过
+
           this.on.video.decode && this.on.video.decode({ timestamp, bitmap })
 
           // 返回对应的 nalus
           if (this.currentChunk && this.currentChunk.kind === 'video' && this.currentChunk.nalus) {
             this.on.nalus && this.on.nalus(this.currentChunk.nalus)
           }
-        } else {
-          bitmap.close()
+        } catch (error: any) {
+          frame.close()
         }
       },
       error: (e) => {
