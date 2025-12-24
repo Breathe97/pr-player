@@ -1,5 +1,3 @@
-import { RenderWorker } from './render/RenderWorker'
-
 export const getFormatFromUrlPattern = (url: string) => {
   const lowerUrl = url.toLowerCase()
 
