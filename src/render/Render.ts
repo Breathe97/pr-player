@@ -1,7 +1,7 @@
 import type { CutOption } from './type'
 
 export class Render {
-  private renderMap = new Map<string, { writable: any; writer: any; pause: boolean; option?: CutOption }>()
+  private renderMap = new Map<string, { writer?: any; offscreen?: OffscreenCanvas; pause: boolean; option?: CutOption }>()
 
   constructor() {}
 
@@ -16,25 +16,42 @@ export class Render {
     for (const cut_key of cut_keys) {
       const ins = this.renderMap.get(cut_key)
       if (!ins) continue
-      const { pause = false, writer, option } = ins
+      const { pause = false, writer, offscreen, option } = ins
 
       if (pause === true) continue // 已暂停
 
       // 原画
       if (cut_key === 'default' || !option) {
-        const videoFrame = new VideoFrame(bitmap, { timestamp })
-        writer.write(videoFrame)
-        videoFrame.close() // 销毁动画帧数据
+        if (writer) {
+          const videoFrame = new VideoFrame(bitmap, { timestamp })
+          writer.write(videoFrame)
+          videoFrame.close() // 销毁动画帧数据
+        }
+        //
+        else if (offscreen) {
+          offscreen.width = bitmap.width
+          offscreen.height = bitmap.height
+          offscreen?.getContext('2d')?.drawImage(bitmap, 0, 0)
+        }
       }
 
       // 裁剪
       else {
         const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = option
         const newBitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
-        const videoFrame = new VideoFrame(newBitmap, { timestamp })
-        newBitmap.close() // 销毁剪切后的原始帧数据
-        writer.write(videoFrame)
-        videoFrame.close() // 销毁剪切后的动画帧数据
+        if (writer) {
+          const videoFrame = new VideoFrame(newBitmap, { timestamp })
+          newBitmap.close() // 销毁剪切后的原始帧数据
+          writer.write(videoFrame)
+          videoFrame.close() // 销毁剪切后的动画帧数据
+        }
+        //
+        else if (offscreen) {
+          offscreen.width = newBitmap.width
+          offscreen.height = newBitmap.height
+          offscreen?.getContext('2d')?.drawImage(newBitmap, 0, 0)
+          newBitmap.close() // 销毁剪切后的原始帧数据
+        }
       }
     }
     bitmap.close() // 销毁原始帧数据
@@ -43,10 +60,14 @@ export class Render {
   /**
    * 增加剪切
    */
-  addCut = (data: { key?: string; writable: any; option?: CutOption }) => {
-    const { key, writable, option } = { key: 'default', ...data }
-    const writer = writable.getWriter()
-    this.renderMap.set(key, { writable, writer, option, pause: false })
+  addCut = (data: { key?: string; writable: any; offscreen?: OffscreenCanvas; option?: CutOption }) => {
+    const { key, writable, offscreen, option } = { key: 'default', ...data }
+    if (writable) {
+      const writer = writable.getWriter()
+      this.renderMap.set(key, { writer, option, pause: false })
+    } else {
+      this.renderMap.set(key, { offscreen, option, pause: false })
+    }
   }
 
   /**

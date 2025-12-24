@@ -38,7 +38,7 @@ import { PrPlayer } from '../../src/index'
 
 const url_options = [
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_4627451267/1765432331029.flv?auth_key=1765518731-0-0-bf7549bd8feea7566946d2a5ea33fe3a' },
+  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_8302515170/1766548196479.flv?auth_key=1766634596-0-0-c2a0228ae2a6c7d7c7102f1b90419835' },
   {
     label: 'flv-dy',
     value:

@@ -36,6 +36,8 @@ export class PrPlayer {
     frameTrack: false
   }
 
+  private converter: 'generator' | 'canvas' = 'MediaStreamTrackGenerator' in window ? 'generator' : 'canvas' // 自动检测浏览器 使用哪一种模式转换生产视频流
+
   private prFetch = new PrFetch()
   private getSegmentsFetch = new PrFetch()
 
@@ -159,10 +161,20 @@ export class PrPlayer {
      * 创建剪切
      */
     create: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
-      // @ts-ignore
-      const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
-      const stream = new MediaStream([trackGenerator])
-      this.renderWorker?.addCut({ key, writable: trackGenerator.writable, option: cutOption })
+      if (this.converter === 'generator') {
+        // @ts-ignore
+        const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
+        const stream = new MediaStream([trackGenerator])
+        this.renderWorker?.addCut({ key, writable: trackGenerator.writable, option: cutOption })
+        this.cutRenders.set(key, { stream })
+        return stream
+      }
+
+      const canvas = document.createElement('canvas')
+
+      const stream = canvas.captureStream()
+      const offscreen = canvas.transferControlToOffscreen()
+      this.renderWorker?.addCut({ key, offscreen, option: cutOption })
       this.cutRenders.set(key, { stream })
       return stream
     },
@@ -329,11 +341,20 @@ export class PrPlayer {
    */
   private initRender = () => {
     this.renderWorker = new RenderWorker()
-    // @ts-ignore
-    const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
-    const stream = new MediaStream([trackGenerator])
-    this.renderWorker?.addCut({ writable: trackGenerator.writable })
-    this.stream = stream
+
+    if (this.converter === 'generator') {
+      // @ts-ignore
+      const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
+      const stream = new MediaStream([trackGenerator])
+      this.renderWorker?.addCut({ writable: trackGenerator.writable })
+      this.stream = stream
+    } else {
+      const canvas = document.createElement('canvas')
+      const stream = canvas.captureStream()
+      const offscreen = canvas.transferControlToOffscreen()
+      this.renderWorker?.addCut({ offscreen })
+      this.stream = stream
+    }
     this.renderWorker?.setPause({ pause: false })
   }
 

@@ -8,7 +8,12 @@ export class RenderWorker {
 
   push = (frame: { timestamp: number; bitmap: ImageBitmap }) => this.worker.postMessage({ action: 'push', data: frame }, [frame.bitmap])
 
-  addCut = (data: { key?: string; writable: any; option?: CutOption }) => this.worker.postMessage({ action: 'addCut', data }, [data.writable])
+  addCut = (data: { key?: string; writable?: any; offscreen?: OffscreenCanvas; option?: CutOption }) => {
+    const transfer = []
+    data.writable && transfer.push(data.writable)
+    data.offscreen && transfer.push(data.offscreen)
+    this.worker.postMessage({ action: 'addCut', data }, transfer)
+  }
 
   delCut = (key: string) => this.worker.postMessage({ action: 'delCut', data: key })
 
