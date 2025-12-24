@@ -3,7 +3,7 @@ import { DecoderWorker } from './decoder/DecoderWorker'
 import { RenderWorker } from './render/RenderWorker'
 import { AudioPlayer } from './audioPlayer/audioPlayer'
 
-import { getFormatFromUrlPattern, stopStream, createStreamGenerator } from './tools'
+import { getFormatFromUrlPattern, stopStream } from './tools'
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/264Parser'
 import { PrFetch } from 'pr-fetch'
@@ -55,7 +55,7 @@ export class PrPlayer {
 
   public on: On = { demuxer: {}, decoder: {} }
 
-  private cutRenders: Map<string, { worker: RenderWorker; stream: MediaStream; destroy: Function }> = new Map()
+  private cutRenders: Map<string, { stream: MediaStream }> = new Map()
 
   // @ts-ignore
   trackGenerator: MediaStreamTrackGenerator
@@ -105,11 +105,7 @@ export class PrPlayer {
     this.demuxerWorker?.destroy()
     this.decoderWorker?.destroy()
     this.renderWorker?.destroy()
-    const keys = [...this.cutRenders.keys()]
-    for (const key of keys) {
-      this.cutRenders.get(key)?.worker.destroy()
-      this.cutRenders.delete(key)
-    }
+    this.cutRenders = new Map()
     stopStream(this.stream)
     this.audioPlayer?.destroy()
   }
@@ -124,7 +120,7 @@ export class PrPlayer {
    * @param pause: boolean
    */
   setPause = (pause: boolean) => {
-    this.renderWorker?.setPause(pause)
+    this.renderWorker?.setPause({ pause })
   }
 
   /**
@@ -163,16 +159,11 @@ export class PrPlayer {
      * 创建剪切
      */
     create: (key: string, cutOption: { sx: number; sy: number; sw: number; sh: number }) => {
-      let renderIns = this.cutRenders.get(key)
-      if (renderIns) {
-        renderIns.worker.setCut(cutOption)
-        renderIns.worker.setPause(false)
-        return renderIns
-      }
-      renderIns = createStreamGenerator()
-      renderIns.worker.setCut(cutOption)
-      this.cutRenders.set(key, renderIns)
-      return renderIns
+      // @ts-ignore
+      const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
+      const stream = new MediaStream([trackGenerator])
+      this.renderWorker?.addCut({ key, writable: trackGenerator.writable, option: cutOption })
+      this.cutRenders.set(key, { stream })
     },
 
     /**
@@ -181,18 +172,19 @@ export class PrPlayer {
     getStream: (key: string) => this.cutRenders.get(key)?.stream,
 
     /**
+     * 移除剪切
+     */
+    remove: (key: string) => {
+      this.renderWorker?.delCut(key)
+      this.cutRenders.delete(key)
+    },
+
+    /**
      * 设置暂停
      * @param pause: boolean
      */
     setPause: (key: string, pause: boolean) => {
-      this.cutRenders.get(key)?.worker.setPause(pause)
-    },
-    /**
-     * 移除剪切
-     */
-    remove: (key: string) => {
-      this.cutRenders.get(key)?.destroy()
-      this.cutRenders.delete(key)
+      this.renderWorker?.setPause({ key, pause })
     }
   }
 
@@ -300,12 +292,7 @@ export class PrPlayer {
         this.start_resolve = undefined
       }
       this.renderWorker?.push(frame)
-      const keys = [...this.cutRenders.keys()]
-      for (const key of keys) {
-        this.cutRenders.get(key)?.worker.push(frame)
-      }
       this.on.decoder.video && this.on.decoder.video(frame)
-      frame.bitmap.close()
     }
 
     this.decoderWorker.on.video.error = (e) => {
@@ -333,10 +320,13 @@ export class PrPlayer {
    * 初始化渲染器
    */
   private initRender = () => {
-    const { worker, stream } = createStreamGenerator()
-    this.renderWorker = worker
+    this.renderWorker = new RenderWorker()
+    // @ts-ignore
+    const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
+    const stream = new MediaStream([trackGenerator])
+    this.renderWorker?.addCut({ writable: trackGenerator.writable })
     this.stream = stream
-    this.renderWorker.setPause(false)
+    this.renderWorker?.setPause({ pause: false })
   }
 
   private flv = {

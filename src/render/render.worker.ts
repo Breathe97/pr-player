@@ -1,7 +1,7 @@
 import { Render } from './Render'
 
 interface WorkerMessage {
-  action: 'init' | 'push' | 'setCut' | 'setPause' | 'destroy'
+  action: 'push' | 'addCut' | 'delCut' | 'setCut' | 'setPause' | 'destroy'
   data: never
 }
 

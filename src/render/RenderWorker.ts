@@ -6,10 +6,16 @@ export class RenderWorker {
 
   constructor() {}
 
-  init = ({ writable }: { writable: any }) => this.worker.postMessage({ action: 'init', data: { writable } }, [writable])
   push = (frame: { timestamp: number; bitmap: ImageBitmap }) => this.worker.postMessage({ action: 'push', data: frame }, [frame.bitmap])
-  setCut = async (cutOption: CutOption) => this.worker.postMessage({ action: 'setCut', data: cutOption })
-  setPause = (pause: boolean) => this.worker.postMessage({ action: 'setPause', data: pause })
+
+  addCut = (data: { key?: string; writable: any; option?: CutOption }) => this.worker.postMessage({ action: 'addCut', data }, [data.writable])
+
+  delCut = (key: string) => this.worker.postMessage({ action: 'delCut', data: key })
+
+  setCut = (data: { key?: string; cutOption: CutOption }) => this.worker.postMessage({ action: 'setCut', data })
+
+  setPause = (data: { key?: string; pause: boolean }) => this.worker.postMessage({ action: 'setPause', data: data })
+
   destroy = () => {
     this.worker.postMessage({ action: 'destroy', data: {} })
     this.worker.terminate()

@@ -32,21 +32,3 @@ export const stopStream = (stream: MediaStream | undefined) => {
     track.stop()
   }
 }
-
-export const createStreamGenerator = () => {
-  // @ts-ignore
-  const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' })
-
-  const stream = new MediaStream([trackGenerator])
-
-  const worker = new RenderWorker()
-
-  worker.init({ writable: trackGenerator.writable })
-
-  const destroy = () => {
-    worker.destroy()
-    stopStream(stream)
-  }
-
-  return { worker, stream, destroy }
-}
