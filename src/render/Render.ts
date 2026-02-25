@@ -8,8 +8,8 @@ export class Render {
   push = async (frame: { timestamp: number; bitmap: ImageBitmap }) => {
     const { timestamp } = frame
     const { bitmap } = frame
-    if (bitmap.height === 0 || bitmap.width === 0) return bitmap.close() // 异常数据跳过
     try {
+      // if (bitmap.height === 0 || bitmap.width === 0) return bitmap.close() // 异常数据跳过
       const cut_keys = [...this.renderMap.keys()]
       for (const cut_key of cut_keys) {
         const ins = this.renderMap.get(cut_key)
@@ -18,11 +18,12 @@ export class Render {
 
         if (pause === true) continue // 已暂停
 
-        const rendering = (bitmap: ImageBitmap) => {
+        const rendering = async (bitmap: ImageBitmap) => {
           if (writer) {
             const videoFrame = new VideoFrame(bitmap, { timestamp })
+
             try {
-              videoFrame && writer.write(videoFrame)
+              await writer.write(videoFrame)
             } catch (error) {}
             videoFrame.close() // 销毁动画帧数据
           }
@@ -36,13 +37,13 @@ export class Render {
 
         // 原画
         if (cut_key === 'default') {
-          rendering(bitmap)
+          await rendering(bitmap)
         }
         // 裁剪
         else if (option) {
           const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = option
           const newBitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
-          rendering(newBitmap)
+          await rendering(newBitmap)
         }
       }
     } catch (error) {}

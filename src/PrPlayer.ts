@@ -212,8 +212,8 @@ export class PrPlayer {
    * 初始化
    */
   private init = (pattern: Pattern) => {
-    this.initDecoder(pattern)
     this.initRender()
+    this.initDecoder(pattern)
     this.initDemuxer(pattern)
     this.audioPlayer = new AudioPlayer()
     this.audioPlayer.init()
