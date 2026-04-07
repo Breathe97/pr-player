@@ -1,8 +1,10 @@
 import Worker from './render.worker.ts?worker&inline' // 在生产环境中，可能会遇到 MIME type is text/html 的错误。可以通过添加 ?inline 参数避免单独生成 Worker 文件。
 import type { CutOption } from './type'
 
+const WORKER_NAME = 'pr-player-render'
+
 export class RenderWorker {
-  worker = new Worker()
+  worker = new Worker({ name: WORKER_NAME })
 
   constructor() {}
 
