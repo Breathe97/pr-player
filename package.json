@@ -1,31 +1,32 @@
 {
   "name": "pr-player",
   "description": "对 flv hls 格式的地址进行解析 并输出 MediaStream，提供 demuxer 层(info、chunk)回调、 decoder 层(audio、video、sei)回调 ，提供 cut 等相关能力，以支持根据业务层 SEI 对视频进行剪切渲染。",
-  "version": "0.3.8",
+  "version": "0.4.0",
   "type": "module",
   "files": [
     "dist"
   ],
   "main": "./dist/index.umd.cjs",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "require": "./dist/index.umd.cjs"
+      "require": "./dist/index.umd.cjs",
+      "types": "./dist/src/index.d.ts"
     }
   },
   "scripts": {
     "build": "tsc && vite build"
   },
   "dependencies": {
-    "pr-audio-stream": "^0.2.10",
+    "pr-audio-stream": "^0.2.11",
     "pr-fetch": "^0.0.4"
   },
   "devDependencies": {
     "typescript": "^6.0.2",
-    "vite": "^8.0.2",
-    "vite-plugin-dts": "^4.5.4"
+    "vite": "^8.0.5",
+    "vite-plugin-dts": "^4.5.2"
   },
   "private": false,
   "author": "Breathe",
