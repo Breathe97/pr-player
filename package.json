@@ -20,12 +20,12 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
-    "pr-audio-stream": "^0.2.11",
+    "pr-audio-stream": "^0.2.12",
     "pr-fetch": "^0.0.4"
   },
   "devDependencies": {
     "typescript": "^6.0.2",
-    "vite": "^8.0.5",
+    "vite": "^8.0.7",
     "vite-plugin-dts": "^4.5.2"
   },
   "private": false,
