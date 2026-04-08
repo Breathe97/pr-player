@@ -122,6 +122,7 @@ export class AudioPlayer {
     this.destination = undefined
     this.nextStartTime = 0
     this.prAudioStream?.stop()
+    this.prAudioStream?.destroy()
     this.pendingSources.forEach((source) => source.stop())
     this.pendingSources = []
   }
