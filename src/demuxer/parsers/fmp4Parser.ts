@@ -20,6 +20,9 @@ interface TrackInfo {
   timescale: number
   width?: number
   height?: number
+  /** mvex/trex 中的默认 sample 时长（timescale 单位） */
+  defaultSampleDuration?: number
+  defaultSampleSize?: number
 }
 
 const readDescLength = (data: Uint8Array, offset: number) => {
@@ -89,6 +92,15 @@ export class ParseFMP4 {
           this.mdatBox = box
           this.tryRunProgressive(view, buffer)
           break
+        case 'sidx':
+        case 'styp':
+        case 'free':
+        case 'skip':
+        case 'ftyp':
+          break
+        default:
+          this.dbg('skip-box', { type: box.type, offset: box.offset, size: box.size })
+          break
       }
 
       offset += box.size
@@ -105,10 +117,7 @@ export class ParseFMP4 {
 
     const mdat = this.mdatBox ?? findBox(view, 0, buffer.byteLength, 'mdat')
     const moov = findBox(view, 0, buffer.byteLength, 'moov')
-    if (!mdat || !moov) {
-      this.dbg('progressive-wait', { hasMdat: !!mdat, hasMoov: !!moov, trackCount: this.tracks.size })
-      return
-    }
+    if (!mdat || !moov) return
     if (!this.isProgressiveReady(mdat, moov, buffer.byteLength)) {
       this.dbg('progressive-not-ready', {
         mdatEnd: mdat.offset + mdat.size,
@@ -133,6 +142,26 @@ export class ParseFMP4 {
       if (box.type !== 'trak') return
       this.parseTrak(view, box)
     })
+
+    const mvex = findBox(view, moov.contentStart, moov.offset + moov.size, 'mvex')
+    if (mvex) {
+      forEachBox(view, mvex.contentStart, mvex.offset + mvex.size, (box) => {
+        if (box.type !== 'trex') return
+        const trackId = view.getUint32(box.contentStart + 4, false)
+        const track = this.tracks.get(trackId)
+        if (!track) return
+        track.defaultSampleDuration = view.getUint32(box.contentStart + 12, false)
+        track.defaultSampleSize = view.getUint32(box.contentStart + 16, false)
+      })
+      this.dbg('mvex-parsed', {
+        tracks: [...this.tracks.entries()].map(([id, t]) => ({
+          id,
+          kind: t.kind,
+          defaultSampleDuration: t.defaultSampleDuration,
+          defaultSampleSize: t.defaultSampleSize
+        }))
+      })
+    }
 
     const mvhd = findBox(view, moov.contentStart, moov.offset + moov.size, 'mvhd')
     if (mvhd) {
@@ -260,9 +289,20 @@ export class ParseFMP4 {
     return null
   }
 
+  private findMdatForMoof = (view: DataView, moof: BoxInfo, bufferLength: number): BoxInfo | null => {
+    let offset = moof.offset + moof.size
+    while (offset + 8 <= bufferLength) {
+      const box = readBoxAt(view, offset, bufferLength)
+      if (!box) break
+      if (box.type === 'moof') break
+      if (box.type === 'mdat') return box
+      offset += box.size
+    }
+    return null
+  }
+
   private parseMoof = (view: DataView, moof: BoxInfo, buffer: Uint8Array) => {
-    const mdats = collectBoxes(view, 0, buffer.byteLength, 'mdat')
-    const mdat = mdats.find((b) => b.offset > moof.offset) || mdats[0]
+    const mdat = this.findMdatForMoof(view, moof, buffer.byteLength)
     if (!mdat) {
       this.dbg('moof-no-mdat', { moofOffset: moof.offset })
       return
@@ -274,7 +314,7 @@ export class ParseFMP4 {
       trafCount += 1
       this.parseTraf(view, box, moof.offset, mdat, buffer)
     })
-    this.dbg('moof-parsed', { moofOffset: moof.offset, trafCount, ...this.chunkStats })
+    this.dbg('moof-parsed', { moofOffset: moof.offset, trafCount, mdatOffset: mdat.offset, ...this.chunkStats })
   }
 
   private ticksToMs = (ticks: number, timescale: number) => (ticks / timescale) * 1000
@@ -319,11 +359,32 @@ export class ParseFMP4 {
       return
     }
 
-    const tfhdFlags = view.getUint32(tfhd.contentStart, false) & 0xffffff
+    const tfhdWord = view.getUint32(tfhd.contentStart, false)
+    const tfhdFlags = tfhdWord & 0xffffff
+    const defaultBaseIsMoof = (tfhdFlags & 0x020000) !== 0
+
     let tfhdOffset = tfhd.contentStart + 8
-    if (tfhdFlags & 0x1) tfhdOffset += 8
+    let baseDataOffset: number | null = null
+    let defaultSampleDuration = 0
+    let defaultSampleSize = 0
+
+    if (tfhdFlags & 0x1) {
+      baseDataOffset = Number(view.getBigUint64(tfhdOffset, false))
+      tfhdOffset += 8
+    }
     if (tfhdFlags & 0x2) tfhdOffset += 4
-    const defaultSampleSize = tfhdFlags & 0x10 ? view.getUint32(tfhdOffset, false) : 0
+    if (tfhdFlags & 0x8) {
+      defaultSampleDuration = view.getUint32(tfhdOffset, false)
+      tfhdOffset += 4
+    }
+    if (tfhdFlags & 0x10) {
+      defaultSampleSize = view.getUint32(tfhdOffset, false)
+      tfhdOffset += 4
+    }
+    if (tfhdFlags & 0x20) tfhdOffset += 4
+
+    if (!(tfhdFlags & 0x8)) defaultSampleDuration = track.defaultSampleDuration ?? 0
+    if (!(tfhdFlags & 0x10)) defaultSampleSize = track.defaultSampleSize ?? 0
 
     const tfdtVersion = view.getUint8(tfdt.contentStart)
     const baseTime =
@@ -332,44 +393,74 @@ export class ParseFMP4 {
         : view.getUint32(tfdt.contentStart + 4, false)
 
     const trunFlags = view.getUint32(trun.contentStart, false) & 0xffffff
-    let trunOffset = trun.contentStart + 8
+    const trunEnd = trun.offset + trun.size
+    let trunOffset = trun.contentStart + 4
+
+    if (trunOffset + 4 > trunEnd) return
     const sampleCount = view.getUint32(trunOffset, false)
     trunOffset += 4
 
+    if (sampleCount === 0 || sampleCount > 10000) {
+      this.dbg('traf-bad-sample-count', { trackId, sampleCount })
+      return
+    }
+
     let dataOffset = 0
     if (trunFlags & 0x1) {
+      if (trunOffset + 4 > trunEnd) return
       dataOffset = view.getInt32(trunOffset, false)
       trunOffset += 4
     }
     if (trunFlags & 0x4) trunOffset += 4
 
-    let sampleOffset = moofStart + dataOffset
+    let sampleBase: number
+    if (defaultBaseIsMoof) {
+      sampleBase = moofStart
+    } else if (baseDataOffset !== null) {
+      sampleBase = baseDataOffset
+    } else {
+      sampleBase = mdat.offset
+    }
+    let sampleOffset = sampleBase + (trunFlags & 0x1 ? dataOffset : 0)
     let dts = baseTime
 
     for (let i = 0; i < sampleCount; i++) {
-      let sampleDuration = 0
+      let sampleDuration = defaultSampleDuration
       let sampleSize = defaultSampleSize
       let sampleFlags = 0
 
       if (trunFlags & 0x100) {
+        if (trunOffset + 4 > trunEnd) break
         sampleDuration = view.getUint32(trunOffset, false)
         trunOffset += 4
       }
       if (trunFlags & 0x200) {
+        if (trunOffset + 4 > trunEnd) break
         sampleSize = view.getUint32(trunOffset, false)
         trunOffset += 4
       }
       if (trunFlags & 0x400) {
+        if (trunOffset + 4 > trunEnd) break
         sampleFlags = view.getUint32(trunOffset, false)
         trunOffset += 4
       }
       let compositionOffset = 0
       if (trunFlags & 0x800) {
+        if (trunOffset + 4 > trunEnd) break
         compositionOffset = view.getInt32(trunOffset, false)
         trunOffset += 4
       }
 
+      if (sampleDuration <= 0 && track.kind === 'audio') {
+        const rate = this.audioConfig?.sampleRate ?? track.timescale
+        sampleDuration = Math.round((1024 * track.timescale) / rate)
+      }
+
       if (sampleSize <= 0) continue
+      if (sampleOffset + sampleSize > buffer.byteLength) {
+        this.dbg('traf-sample-oob', { trackId, kind: track.kind, i, sampleOffset, sampleSize, bufferLength: buffer.byteLength })
+        break
+      }
 
       const sampleData = buffer.slice(sampleOffset, sampleOffset + sampleSize)
       sampleOffset += sampleSize

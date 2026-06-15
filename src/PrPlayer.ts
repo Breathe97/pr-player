@@ -736,6 +736,13 @@ export class PrPlayer {
           const info = await this.dash.getMpd()
           if (!info) return reject('mpd parse is error.')
 
+          const dashRep = info.adaptations.find((a) => a.kind === 'video' || a.kind === 'mux')?.representation
+          if (dashRep?.width && dashRep?.height) {
+            const dashInfo = { width: dashRep.width, height: dashRep.height, duration: info.duration }
+            prPlayerDebug.log('dash', 'info', dashInfo)
+            this.on.demuxer.info && this.on.demuxer.info(dashInfo)
+          }
+
           const segmentListAdapt = info.adaptations.find((a) => a.representation.segmentList)
           if (segmentListAdapt?.representation.segmentList) {
             const { segmentList, baseUrl: repBaseUrl } = segmentListAdapt.representation

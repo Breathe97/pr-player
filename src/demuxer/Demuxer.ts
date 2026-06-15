@@ -175,22 +175,24 @@ export class Demuxer {
 
 
       while (true) {
-
         const view = this.cacher.next(this.offset)
-
         this.offset = 0
-
         if (!view) break
 
-        const parsed = await this.parser.parse(view)
+        try {
+          const parsed = await this.parser.parse(view)
 
-        if (this.pattern === 'mp4' || this.pattern === 'dash') {
-          const fmp4 = this.parser as ParseFMP4
-          this.offset = fmp4.getDiscardOffset(view.byteLength, view)
-        } else {
-          this.offset = parsed
+          if (this.pattern === 'mp4' || this.pattern === 'dash') {
+            const fmp4 = this.parser as ParseFMP4
+            this.offset = fmp4.getDiscardOffset(view.byteLength, view)
+          } else {
+            this.offset = parsed
+          }
+        } catch (error) {
+          this.cacher.discardPayload()
+          this.on.debug?.({ demuxer: 'error', message: String(error), stack: error instanceof Error ? error.stack : undefined })
+          continue
         }
-
       }
 
       this.isParseing = false
@@ -199,6 +201,7 @@ export class Demuxer {
 
       this.isParseing = false
 
+      this.cacher.discardPayload()
       this.on.debug?.({ demuxer: 'error', message: String(error), stack: error instanceof Error ? error.stack : undefined })
     }
 

@@ -43,6 +43,10 @@ export class Cacher {
     // console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunks`, this.chunks.length)
   }
 
+  discardPayload = () => {
+    this.payload = new Uint8Array(0)
+  }
+
   destroy = () => {
     this.pendingPayloads = []
     this.payload = new Uint8Array(0)
