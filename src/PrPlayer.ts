@@ -18,7 +18,7 @@ interface PrPlayerDash {
   getSegmentsTimer: number
   fetchSegment: (url: string) => Promise<boolean>
   fetchByteRange: (url: string, start: number, end: number) => Promise<boolean>
-  getMpd: () => Promise<void>
+  getMpd: () => Promise<MpdInfo | null>
   start: () => Promise<unknown>
 }
 
@@ -376,6 +376,10 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.error = (e) => {
+      prPlayerDebug.error('decoder', 'video.error', e)
+      if (this.option.debug) {
+        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: video.error `, e)
+      }
       this.on.error && this.on.error(e)
     }
 
@@ -669,7 +673,7 @@ export class PrPlayer {
       }
       return data.byteLength > 0
     },
-    getMpd: async () => {
+    getMpd: async (): Promise<MpdInfo | null> => {
       try {
         let res
         let count = 0
@@ -715,10 +719,12 @@ export class PrPlayer {
           }))
         })
         if (!this.dash.isLive) this.option.frameTrack = false
+        return mpdInfo
       } catch (error: any) {
         if (error.name !== 'AbortError') {
           this.on.error && this.on.error(error)
         }
+        return null
       }
     },
     start: () => {
@@ -727,9 +733,7 @@ export class PrPlayer {
           this.start_resolve = resolve
           this.dash.segmentNumber = 1
           this.dash.mpdInfo = null
-          await this.dash.getMpd()
-
-          const info = this.dash.mpdInfo
+          const info = await this.dash.getMpd()
           if (!info) return reject('mpd parse is error.')
 
           const segmentListAdapt = info.adaptations.find((a) => a.representation.segmentList)
@@ -775,8 +779,9 @@ export class PrPlayer {
           }
 
           while (true) {
-            if (!this.dash.mpdInfo || this.url === '') break
-            const { baseUrl } = this.dash.mpdInfo
+            const mpd: MpdInfo | null = this.dash.mpdInfo
+            if (!mpd || this.url === '') break
+            const { baseUrl } = mpd
             let hasSegment = false
 
             for (const adapt of reps) {
