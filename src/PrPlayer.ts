@@ -17,7 +17,7 @@ interface On {
   }
   decoder: {
     audio?: (_audio: { audioData: AudioData; playbackRate?: number }) => void
-    video?: (_frame: { timestamp: number; bitmap: ImageBitmap }) => void
+    video?: (_frame: { timestamp: number; frame: VideoFrame }) => void
     sei?: (_payload: Uint8Array) => void
     analysis?: (_e: any) => void
   }
@@ -306,7 +306,7 @@ export class PrPlayer {
       this.on.error && this.on.error(e)
     }
 
-    this.decoderWorker.on.video.decode = async (frame) => {
+    this.decoderWorker.on.video.decode = (frame) => {
       if (this.start_resolve) {
         this.start_resolve(true)
         this.start_resolve = undefined

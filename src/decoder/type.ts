@@ -4,7 +4,7 @@ export interface On {
     error?: (_e: DOMException) => void
   }
   video: {
-    decode?: (_frame: { bitmap: ImageBitmap; timestamp: number }) => void
+    decode?: (_frame: { frame: VideoFrame; timestamp: number }) => void
     error?: (_e: DOMException) => void
   }
   nalus?: (nalus: Uint8Array<ArrayBufferLike>[]) => void

@@ -8,7 +8,7 @@ export class RenderWorker {
 
   constructor() {}
 
-  push = (frame: { timestamp: number; bitmap: ImageBitmap }) => this.worker.postMessage({ action: 'push', data: frame }, [frame.bitmap])
+  push = (frame: { timestamp: number; frame: VideoFrame }) => this.worker.postMessage({ action: 'push', data: frame }, [frame.frame])
 
   addCut = (data: { key?: string; writable?: any; offscreen?: OffscreenCanvas; option?: CutOption }) => {
     const transfer = []

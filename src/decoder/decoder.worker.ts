@@ -12,7 +12,7 @@ decoder.on.audio.decode = (data) => postMessage({ action: 'on.audio.decode', dat
 decoder.on.audio.error = (data) => postMessage({ action: 'on.audio.error', data })
 
 // @ts-ignore
-decoder.on.video.decode = (data: { timestamp: number; bitmap: ImageBitmap }) => postMessage({ action: 'on.video.decode', data }, [data.bitmap])
+decoder.on.video.decode = (data) => postMessage({ action: 'on.video.decode', data }, [data.frame])
 decoder.on.video.error = (data) => postMessage({ action: 'on.video.error', data })
 
 decoder.on.nalus = (data) => postMessage({ action: 'on.nalus', data })

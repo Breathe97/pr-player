@@ -5,49 +5,56 @@ export class Render {
 
   constructor() {}
 
-  push = async (frame: { timestamp: number; bitmap: ImageBitmap }) => {
-    const { timestamp } = frame
-    const { bitmap } = frame
+  push = async (data: { timestamp: number; frame: VideoFrame }) => {
+    const source = data.frame
+    const timestamp = source.timestamp
+
     try {
-      // if (bitmap.height === 0 || bitmap.width === 0) return bitmap.close() // 异常数据跳过
-      const cut_keys = [...this.renderMap.keys()]
-      for (const cut_key of cut_keys) {
-        const ins = this.renderMap.get(cut_key)
-        if (!ins) continue
-        const { pause = false, writer, offscreen, option } = ins
+      const entries = [...this.renderMap.entries()].filter(([, ins]) => ins && !ins.pause)
+      // 仅主路 generator 且无 cut 时零拷贝直写
+      const isSingleDefaultWriter =
+        entries.length === 1 && entries[0][0] === 'default' && !!entries[0][1].writer
 
-        if (pause === true) continue // 已暂停
+      if (isSingleDefaultWriter) {
+        entries[0][1].writer!.write(source).catch(() => {})
+        source.close()
+        return
+      }
 
-        const rendering = async (bitmap: ImageBitmap) => {
-          if (writer) {
-            const videoFrame = new VideoFrame(bitmap, { timestamp })
+      for (const [cut_key, ins] of entries) {
+        const { writer, offscreen, option } = ins
 
-            try {
-              await writer.write(videoFrame)
-            } catch (error) {}
-            videoFrame.close() // 销毁动画帧数据
+        if (writer) {
+          let vf: VideoFrame
+          if (cut_key === 'default' || !option) {
+            vf = new VideoFrame(source, { timestamp })
+          } else {
+            const { sx = 0, sy = 0, sw = source.displayWidth, sh = source.displayHeight } = option
+            vf = new VideoFrame(source, {
+              visibleRect: { x: sx, y: sy, width: sw, height: sh },
+              displayWidth: sw,
+              displayHeight: sh,
+              timestamp
+            })
           }
-          //
-          else if (offscreen) {
-            offscreen.width = bitmap.width
-            offscreen.height = bitmap.height
-            offscreen?.getContext('2d')?.drawImage(bitmap, 0, 0)
+          writer.write(vf).catch(() => {})
+          vf.close()
+        } else if (offscreen) {
+          if (cut_key === 'default' || !option) {
+            offscreen.width = source.displayWidth
+            offscreen.height = source.displayHeight
+            offscreen.getContext('2d')?.drawImage(source, 0, 0)
+          } else {
+            const { sx = 0, sy = 0, sw = source.displayWidth, sh = source.displayHeight } = option
+            offscreen.width = sw
+            offscreen.height = sh
+            offscreen.getContext('2d')?.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh)
           }
-        }
-
-        // 原画
-        if (cut_key === 'default') {
-          await rendering(bitmap)
-        }
-        // 裁剪
-        else if (option) {
-          const { sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height } = option
-          const newBitmap = await createImageBitmap(bitmap, sx, sy, sw, sh)
-          await rendering(newBitmap)
         }
       }
-    } catch (error) {}
-    bitmap.close() // 销毁原始帧数据
+    } catch {}
+
+    source.close()
   }
 
   /**

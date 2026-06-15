@@ -77,26 +77,24 @@ export class Decoder {
     this.video.destroy()
     this.videoDecoderConfig = { ...config }
     this.videoDecoder = new VideoDecoder({
-      output: async (frame: VideoFrame) => {
+      output: (frame: VideoFrame) => {
         if (!this.frameStartTime) {
           this.frameStartTime = frame.timestamp
         }
         try {
-          // 修正时间戳为真实的本地绝对时间
           const timestamp = frame.timestamp - this.frameStartTime + this.baseTime * 1000
-          const bitmap = await createImageBitmap(frame)
-
+          // 只改 timestamp 元数据，不读像素，比 createImageBitmap 轻得多
+          const outputFrame = new VideoFrame(frame, { timestamp })
           frame.close()
-
-          if (!bitmap.width || !bitmap.height) return bitmap.close() // 异常数据 跳过
-
-          this.on.video.decode && this.on.video.decode({ timestamp, bitmap })
-
-          // 返回对应的 nalus
-          if (this.currentChunk && this.currentChunk.kind === 'video' && this.currentChunk.nalus) {
-            this.on.nalus && this.on.nalus(this.currentChunk.nalus)
+          if (!outputFrame.displayWidth || !outputFrame.displayHeight) {
+            outputFrame.close()
+            return
           }
-        } catch (error: any) {
+          this.on.video.decode?.({ timestamp, frame: outputFrame })
+          if (this.currentChunk?.kind === 'video' && this.currentChunk.nalus) {
+            this.on.nalus?.(this.currentChunk.nalus)
+          }
+        } catch {
           frame.close()
         }
       },
