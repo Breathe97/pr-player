@@ -4,6 +4,8 @@ import type { Chunk } from './Cacher'
 import { createAVCC, mergeNalus, naluToAVCC, parseAVCC } from './264Parser'
 import type { AudioConfig, VideoConfig } from './Demuxer'
 
+const AAC_SAMPLE_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
+
 const getMediaKind = (stream_type: number) => {
   // ​​视频流​​：0x01（MPEG-1）、0x02（MPEG-2）、0x1B（H.264）、0x24（HEVC）。
   // ​​音频流​​：0x03（MPEG-1）、0x04（MPEG-2）、0x0F（AAC）。
@@ -128,22 +130,22 @@ export class ParseTS {
     // @ts-ignore
     let adaptationField
 
-    // (8b) 表示 AdaptationField的总字节数（不包括本字段）。如果为 0，则仅填充字节（0xFF）存在。
+    // (8b) adaptation_field_length：不含长度字节本身的后续字节数
     if (adaptation_field_control === 2 || adaptation_field_control === 3) {
       const adaptation_field_length = view.getUint8(currentOffset)
       currentOffset += 1
 
-      adaptationField = this.parseAdaptationField(view, currentOffset)
-      currentOffset += adaptation_field_length
-      payloadLength -= adaptation_field_length
-    }
+      if (adaptation_field_length > 0) {
+        adaptationField = this.parseAdaptationField(view, currentOffset)
+        currentOffset += adaptation_field_length
+      }
 
-    if (adaptation_field_control === 3) {
-      payloadLength -= 1
+      payloadLength -= 1 + adaptation_field_length
     }
 
     // 解析有效载荷(如果存在)
     if (adaptation_field_control === 1 || adaptation_field_control === 3) {
+      if (payloadLength <= 0) return
       const payload = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadLength))
       // 解析 PAT
       {
@@ -334,6 +336,8 @@ export class ParseTS {
       header = { pointer_field, table_id, section_length, transport_stream_id, version_number, current_next_indicator, section_number, last_section_number, pcr_pid, program_info_length }
     }
 
+    currentOffset += header.program_info_length
+
     const streams = []
     {
       const streamsLength = header.section_length - 9 - 4 // 需要排除 header部分 和 crc
@@ -344,7 +348,7 @@ export class ParseTS {
         const kind = getMediaKind(stream_type)
         const elementary_pid = view.getUint16(currentOffset + 1) & 0x1fff
         const es_info_length = view.getUint16(currentOffset + 3) & 0x0fff
-        currentOffset += 5
+        currentOffset += 5 + es_info_length
 
         if (elementary_pid < 0x0020 || elementary_pid > 0x1ffe) {
           console.warn(`Invalid elementary_pid: 0x${elementary_pid.toString(16)}`)
@@ -489,52 +493,43 @@ export class ParseTS {
     pes_payload = payload.slice(currentOffset)
 
     {
-      if (!this.audioConfig) {
-        const num = view.getUint8(currentOffset)
-        if (num === 255) {
-          // const num_1 = view.getUint8(currentOffset + 1)
-          const num_2 = view.getUint8(currentOffset + 2)
-          const num_3 = view.getUint8(currentOffset + 3)
-          // const num_4 = view.getUint8(currentOffset + 4)
-          // const num_5 = view.getUint8(currentOffset + 5)
-          // const num_6 = view.getUint8(currentOffset + 6)
-
-          let channelConfiguration, samplingFrequencyIndex
-          // let mpegVersion, layer, protectionAbsent, profile, privateBit, frameLength, bufferFullness, numberOfRawDataBlocks
-
-          // mpegVersion = (num_1 >> 3) & 0x01
-          // layer = (num_1 >> 1) & 0x03
-          // protectionAbsent = num_1 & 0x01
-          // profile = (num_2 >> 6) & 0x03
-
-          samplingFrequencyIndex = (num_2 >> 2) & 0x0f
-
-          // privateBit = (num_2 >> 1) & 0x01
-
-          channelConfiguration = ((num_2 & 0x01) << 2) | (num_3 >> 6)
-
-          // frameLength = ((num_3 & 0x03) << 11) | (num_4 << 3) | (num_5 >> 5)
-          // bufferFullness = ((num_5 & 0x1f) << 6) | (num_6 >> 2)
-          // numberOfRawDataBlocks = num_6 & 0x03
-
-          const codec = `mp4a.40.${channelConfiguration}`
-
-          // 采样率对照表
-          const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
-          const sampleRate = sampleRates[samplingFrequencyIndex]
-
-          this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels: channelConfiguration }
-          this.on.config && this.on.config(this.audioConfig)
+      const adts = this.parseAdts(pes_payload)
+      if (!this.audioConfig && adts) {
+        this.audioConfig = {
+          kind: 'audio',
+          codec: adts.codec,
+          sampleRate: adts.sampleRate,
+          numberOfChannels: adts.channelConfiguration
         }
+        this.on.config && this.on.config(this.audioConfig)
       }
       const { dts = 0, pts = 0 } = pes_header
 
       const cts = pts - dts
 
-      const data = pes_payload.slice(7)
+      const data = adts ? pes_payload.slice(adts.headerLength) : pes_payload
 
       return { kind: 'audio', type: 'key', dts, pts, cts, data }
     }
+  }
+
+  /** 解析 ADTS 头，返回 header 长度与 AAC 配置 */
+  private parseAdts = (payload: Uint8Array) => {
+    if (payload.length < 7) return null
+    if (payload[0] !== 0xff || (payload[1] & 0xf0) !== 0xf0) return null
+
+    const protectionAbsent = payload[1] & 0x01
+    const headerLength = protectionAbsent ? 7 : 9
+    if (payload.length < headerLength) return null
+
+    const profile = (payload[2] >> 6) & 0x03
+    const audioObjectType = profile + 1
+    const samplingFrequencyIndex = (payload[2] >> 2) & 0x0f
+    const channelConfiguration = ((payload[2] & 0x01) << 2) | (payload[3] >> 6)
+    const sampleRate = AAC_SAMPLE_RATES[samplingFrequencyIndex] ?? 44100
+    const codec = `mp4a.40.${audioObjectType}`
+
+    return { headerLength, codec, sampleRate, channelConfiguration }
   }
 
   private parseVideo = async (payload: Uint8Array) => {
@@ -680,45 +675,36 @@ export class ParseTS {
     const nalus = []
     let currentOffset = 0
 
-    while (true) {
-      if (currentOffset + 4 > payload.byteLength) break
-      // 查找起始码 (0x000001 或 0x00000001)
-      if (payload[currentOffset] !== 0x00 || payload[currentOffset + 1] !== 0x00 || payload[currentOffset + 2] !== 0x01) {
-        currentOffset += 1
-        continue
+    while (currentOffset < payload.byteLength - 2) {
+      const start = this.findAnnexBStart(payload, currentOffset)
+      if (!start) break
+
+      const naluType = payload[start.naluOffset] & 0x1f
+      const next = this.findAnnexBStart(payload, start.nextSearchOffset)
+      const end = next ? next.startOffset : payload.byteLength
+      const naluPayloadLength = end - start.naluOffset
+
+      if (naluPayloadLength > 0) {
+        const _payload = payload.slice(start.naluOffset, start.naluOffset + naluPayloadLength)
+        nalus.push({ type: naluType, nalu: naluToAVCC(_payload) })
       }
 
-      // 找到起始码
-      currentOffset += 3
-      let startOffset = currentOffset
-
-      const naluType = payload[currentOffset] & 0x1f
-      currentOffset += 1
-
-      // 查找下一个起始码 (0x000001 或 0x00000001)
-      while (true) {
-        if (currentOffset + 1 > payload.byteLength) break
-        if (payload[currentOffset] !== 0x00 || payload[currentOffset + 1] !== 0x00 || payload[currentOffset + 2] !== 0x01) {
-          currentOffset += 1
-          continue
-        }
-        break
-      }
-
-      let payloadLength = currentOffset - startOffset
-
-      // 如果是 0x00000001 则需要修正 payloadLength
-      if (payload[currentOffset - 1] === 0x00) {
-        payloadLength -= 1
-      }
-
-      if (payloadLength !== 0) {
-        const _payload = payload.slice(startOffset, startOffset + payloadLength)
-
-        const nalu = naluToAVCC(_payload)
-        nalus.push({ type: naluType, nalu })
-      }
+      currentOffset = next ? next.startOffset : payload.byteLength
     }
     return nalus
+  }
+
+  /** 查找 Annex-B 起始码，支持 0x000001 与 0x00000001 */
+  private findAnnexBStart = (payload: Uint8Array, from: number) => {
+    for (let i = from; i < payload.length - 2; i++) {
+      if (payload[i] !== 0x00 || payload[i + 1] !== 0x00) continue
+      if (payload[i + 2] === 0x01) {
+        return { startOffset: i, naluOffset: i + 3, nextSearchOffset: i + 3 }
+      }
+      if (i + 3 < payload.length && payload[i + 2] === 0x00 && payload[i + 3] === 0x01) {
+        return { startOffset: i, naluOffset: i + 4, nextSearchOffset: i + 4 }
+      }
+    }
+    return null
   }
 }

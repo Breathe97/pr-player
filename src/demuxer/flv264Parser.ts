@@ -12,6 +12,18 @@ const getUint24 = (view: DataView, offset: number) => {
   return num
 }
 
+const getInt24 = (view: DataView, offset: number) => {
+  let num = getUint24(view, offset)
+  if (num & 0x800000) num |= ~0xffffff
+  return num
+}
+
+const getFlvTimestamp = (timestamp: number, timestampExtended: number) => {
+  return (timestampExtended << 24) | timestamp
+}
+
+const AAC_SAMPLE_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
+
 export interface On {
   debug?: (_debug: any) => void
   info?: (_info: any) => void
@@ -44,10 +56,15 @@ export class ParseFLV {
 
       const tagHeader = this.parseTagHeader(view, offset + 4) // previousTagSize(4)
 
-      const { tagType, dataSize, timestamp: dts } = tagHeader
+      const { tagType, dataSize, dts } = tagHeader
 
       if (tagType) {
         const tagBody = this.parseTagBody(tagType, view, offset + 4 + 11, dataSize) // previousTagSize(4) tagHeader(11)
+        if (!tagBody) {
+          offset = offset + 4 + 11 + dataSize
+          await new Promise((resolve) => setTimeout(() => resolve(true), 8))
+          continue
+        }
 
         switch (tagType) {
           case 'script':
@@ -114,18 +131,16 @@ export class ParseFLV {
     }
 
     {
-      version = view.getUint8(3)
+      version = view.getUint8(offset + 3)
     }
 
     {
-      const str = view.getUint8(0).toString(2).padStart(5, '0')
-      const arr = str.split('')
-      const [, , video, , audio] = arr
-      flags = { audio: audio === '1' ? true : false, video: video === '1' ? true : false }
+      const flagsByte = view.getUint8(offset + 4)
+      flags = { audio: !!(flagsByte & 0x04), video: !!(flagsByte & 0x01) }
     }
 
     {
-      dataOffset = view.getUint32(5)
+      dataOffset = view.getUint32(offset + 5)
     }
 
     this.header = { signature, version, flags, dataOffset }
@@ -191,7 +206,8 @@ export class ParseFLV {
     {
       streamID = getUint24(view, offset + 8)
     }
-    return { tagType, dataSize, timestamp, timestampExtended, streamID }
+    const dts = getFlvTimestamp(timestamp, timestampExtended)
+    return { tagType, dataSize, timestamp, timestampExtended, dts, streamID }
   }
 
   private parseTagBody = (tagType: string, view: DataView, offset: number, dataSize: number) => {
@@ -222,7 +238,7 @@ export class ParseFLV {
     // [0]字节
     {
       const amfType = view.getUint8(currentOffset)
-      if (amfType !== 0x02) throw new Error('Invalid AMF type for onMetaData (expected 0x02)')
+      if (amfType !== 0x02) return null
       currentOffset = currentOffset + 1
     }
 
@@ -230,12 +246,12 @@ export class ParseFLV {
     const size = view.getUint16(currentOffset, false) // 大端序
     currentOffset = currentOffset + 2
 
-    // [3,size]字节 一般固定为 onMetaData
+    // [3,size]字节 一般为 onMetaData
     {
       const u8Array = new Int8Array(view.buffer.slice(currentOffset, currentOffset + size))
       const str = this.textDecoder?.decode(u8Array) || ''
-      if (str !== 'onMetaData') throw new Error("Expected 'onMetaData' string")
       currentOffset = currentOffset + size
+      if (str !== 'onMetaData') return { name: str }
     }
 
     // [0]字节
@@ -264,8 +280,11 @@ export class ParseFLV {
     const accPacketType = view.getUint8(currentOffset)
     currentOffset = currentOffset + 1
 
-    // [2,dataSize]字节
-    const payloadSize = dataSize
+    // [2,dataSize]字节 — tag body 去掉已读的 2 字节头
+    const payloadSize = dataSize - (currentOffset - offset)
+    if (payloadSize <= 0) {
+      return { soundFormat, soundRate, soundSize, soundType, accPacketType, data: new Uint8Array(0) }
+    }
     const data = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadSize))
     // aac
     if (soundFormat === 10) {
@@ -276,12 +295,9 @@ export class ParseFLV {
         const samplingFrequencyIndex = ((num & 0x07) << 1) | (num_1 >> 7)
         const channelConfiguration = (num_1 >> 3) & 0x0f
 
-        // 采样率对照表
-        const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
-
         const codec = `mp4a.40.${audioObjectType}`
 
-        const sampleRate = sampleRates[samplingFrequencyIndex]
+        const sampleRate = AAC_SAMPLE_RATES[samplingFrequencyIndex]
 
         return { soundFormat, soundRate, soundSize, soundType, accPacketType, data, samplingFrequencyIndex, channelConfiguration, codec, sampleRate }
       }
@@ -302,12 +318,13 @@ export class ParseFLV {
     const avcPacketType = view.getUint8(currentOffset) // AVC 包类型（仅 H.264）
     currentOffset = currentOffset + 1
 
-    // [2,3,4]字节
-    const cts = getUint24(view, currentOffset)
+    // [2,3,4]字节 — CTS 为有符号 24 位
+    const cts = getInt24(view, currentOffset)
     currentOffset = currentOffset + 3
 
     // [5,dataSize]字节
     const payloadSize = dataSize - 5
+    if (payloadSize < 0) return null
     const data = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + payloadSize))
 
     switch (codecID) {
@@ -315,7 +332,6 @@ export class ParseFLV {
         {
           // config sps pps
           if (avcPacketType === 0) {
-            // [0]字节 固定为1（H.264标准要求）
             const config = parseAVCC(data)
 
             return { frameType, codecID, avcPacketType, cts, data, ...config }
@@ -324,12 +340,12 @@ export class ParseFLV {
           else if (avcPacketType === 1) {
             const nalus = []
 
-            const maxSize = currentOffset + dataSize - 5
+            const maxSize = currentOffset + payloadSize
 
             while (true) {
               if (currentOffset + 4 > maxSize) break
-              // NALU长度
               const size = view.getUint32(currentOffset, false)
+              if (size <= 0 || currentOffset + 4 + size > maxSize) break
 
               const nalu = new Uint8Array(view.buffer.slice(currentOffset, currentOffset + 4 + size))
               currentOffset += 4 + size
@@ -341,9 +357,8 @@ export class ParseFLV {
         }
         break
 
-      default: {
-        throw new Error('Unsupported codecID')
-      }
+      default:
+        return null
     }
 
     return { frameType, codecID, avcPacketType, cts, data }
