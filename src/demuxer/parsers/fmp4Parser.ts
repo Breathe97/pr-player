@@ -148,6 +148,22 @@ export class ParseFMP4 {
     }
   }
 
+  private readTkhdSize = (view: DataView, tkhd: BoxInfo) => {
+    const version = view.getUint8(tkhd.contentStart)
+    const widthOffset = version === 1 ? 72 : 64
+    const heightOffset = version === 1 ? 76 : 68
+    return {
+      width: view.getUint32(tkhd.contentStart + widthOffset, false) >> 16,
+      height: view.getUint32(tkhd.contentStart + heightOffset, false) >> 16
+    }
+  }
+
+  /** VisualSampleEntry 中的宽高（uint16，比 tkhd 更可靠） */
+  private readSampleEntrySize = (view: DataView, entryStart: number) => ({
+    width: view.getUint16(entryStart + 32, false),
+    height: view.getUint16(entryStart + 34, false)
+  })
+
   private parseTrak = (view: DataView, trak: BoxInfo) => {
     const tkhd = findBox(view, trak.contentStart, trak.offset + trak.size, 'tkhd')
     const mdia = findBox(view, trak.contentStart, trak.offset + trak.size, 'mdia')
@@ -155,14 +171,7 @@ export class ParseFMP4 {
 
     const version = view.getUint8(tkhd.contentStart)
     const trackId = view.getUint32(tkhd.contentStart + (version === 1 ? 20 : 12), false)
-    const width =
-      version === 1
-        ? view.getUint32(tkhd.contentStart + 76, false) >> 16
-        : view.getUint32(tkhd.contentStart + 64, false) >> 16
-    const height =
-      version === 1
-        ? view.getUint32(tkhd.contentStart + 80, false) >> 16
-        : view.getUint32(tkhd.contentStart + 68, false) >> 16
+    let { width, height } = this.readTkhdSize(view, tkhd)
 
     const hdlr = findBox(view, mdia.contentStart, mdia.offset + mdia.size, 'hdlr')
     const mdhd = findBox(view, mdia.contentStart, mdia.offset + mdia.size, 'mdhd')
@@ -188,6 +197,12 @@ export class ParseFMP4 {
     const entryFormat = readBoxType(view, entryStart + 4)
 
     if (kind === 'video' && (entryFormat === 'avc1' || entryFormat === 'avc3')) {
+      const fromEntry = this.readSampleEntrySize(view, entryStart)
+      if (fromEntry.width && fromEntry.height) {
+        width = fromEntry.width
+        height = fromEntry.height
+      }
+
       const avcC = findSampleEntryChild(view, entryStart, entryEnd, 'avcC', 86)
       if (!avcC) {
         this.dbg('video-config-missing-avcC', { entryFormat, trackId })
@@ -198,7 +213,15 @@ export class ParseFMP4 {
       const codec = config.codec.replace(/^avc1\./, `${entryFormat}.`)
       this.videoConfig = { kind: 'video', codec, description: avcc, sps: config.sps, pps: config.pps }
       this.on.config?.(this.videoConfig)
-      this.dbg('video-config', { trackId, codec, entryFormat })
+      this.dbg('video-config', { trackId, codec, entryFormat, width, height })
+    }
+
+    if (kind === 'video') {
+      const track = this.tracks.get(trackId)
+      if (track) {
+        track.width = width
+        track.height = height
+      }
     }
 
     if (kind === 'audio' && entryFormat === 'mp4a') {
