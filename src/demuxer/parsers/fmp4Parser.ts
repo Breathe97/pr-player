@@ -7,7 +7,7 @@ import { findBox, findSampleEntryChild, forEachBox, readBoxAt, readBoxType, type
 
 const AAC_SAMPLE_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
 
-export interface On {
+interface On {
   info?: (_info: any) => void
   config?: (_config: AudioConfig | VideoConfig) => void
   chunk?: (_chunk: Chunk) => void
@@ -334,10 +334,7 @@ export class ParseFMP4 {
     if (!(tfhdFlags & 0x10)) defaultSampleSize = track.defaultSampleSize ?? 0
 
     const tfdtVersion = view.getUint8(tfdt.contentStart)
-    const baseTime =
-      tfdtVersion === 1
-        ? Number(view.getBigUint64(tfdt.contentStart + 4, false))
-        : view.getUint32(tfdt.contentStart + 4, false)
+    const baseTime = tfdtVersion === 1 ? Number(view.getBigUint64(tfdt.contentStart + 4, false)) : view.getUint32(tfdt.contentStart + 4, false)
 
     const trunFlags = view.getUint32(trun.contentStart, false) & 0xffffff
     const trunEnd = trun.offset + trun.size
@@ -410,10 +407,7 @@ export class ParseFMP4 {
       const ptsMs = this.ticksToMs(dts + compositionOffset, track.timescale)
       const cts = ptsMs - dtsMs
 
-      const isKey =
-        track.kind === 'video'
-          ? ((sampleFlags >> 16) & 0x1) === 0 || this.isAvccKeyFrame(sampleData)
-          : true
+      const isKey = track.kind === 'video' ? ((sampleFlags >> 16) & 0x1) === 0 || this.isAvccKeyFrame(sampleData) : true
       const type = isKey ? 'key' : 'delta'
 
       if (track.kind === 'video') {
@@ -472,14 +466,9 @@ export class ParseFMP4 {
     const defaultSize = view.getUint32(stsz.contentStart + 4, false)
     const sampleCount = view.getUint32(stsz.contentStart + 8, false)
     const cttsOffsets = this.readCttsOffsets(view, ctts, sampleCount)
-    const chunkCount = stco
-      ? view.getUint32(stco.contentStart + 4, false)
-      : view.getUint32(co64!.contentStart + 4, false)
+    const chunkCount = stco ? view.getUint32(stco.contentStart + 4, false) : view.getUint32(co64!.contentStart + 4, false)
 
-    const readChunkOffset = (chunkIndex: number) =>
-      stco
-        ? view.getUint32(stco.contentStart + 8 + (chunkIndex - 1) * 4, false)
-        : Number(view.getBigUint64(co64!.contentStart + 8 + (chunkIndex - 1) * 8, false))
+    const readChunkOffset = (chunkIndex: number) => (stco ? view.getUint32(stco.contentStart + 8 + (chunkIndex - 1) * 4, false) : Number(view.getBigUint64(co64!.contentStart + 8 + (chunkIndex - 1) * 8, false)))
 
     const syncSet = new Set<number>()
     if (stss) {
@@ -527,10 +516,7 @@ export class ParseFMP4 {
       let chunkOffset = readChunkOffset(chunkIndex)
 
       for (let s = 0; s < samplesInChunk && sampleIndex <= sampleCount; s++, sampleIndex++) {
-        const size =
-          defaultSize === 0
-            ? view.getUint32(stsz.contentStart + 12 + (sampleIndex - 1) * 4, false)
-            : defaultSize
+        const size = defaultSize === 0 ? view.getUint32(stsz.contentStart + 12 + (sampleIndex - 1) * 4, false) : defaultSize
 
         if (chunkOffset + size > buffer.byteLength) return chunks
 
@@ -541,10 +527,7 @@ export class ParseFMP4 {
         const cttsOffset = cttsOffsets[sampleIndex - 1] ?? 0
         const ptsMs = this.ticksToMs(dts + cttsOffset, track.timescale)
         const cts = ptsMs - dtsMs
-        const isKey =
-          track.kind === 'video'
-            ? this.isAvccKeyFrame(sampleData) || syncSet.has(sampleIndex) || syncSet.size === 0
-            : true
+        const isKey = track.kind === 'video' ? this.isAvccKeyFrame(sampleData) || syncSet.has(sampleIndex) || syncSet.size === 0 : true
 
         if (track.kind === 'video') {
           chunks.push({

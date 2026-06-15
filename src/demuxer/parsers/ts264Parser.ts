@@ -35,7 +35,7 @@ const getMediaKind = (stream_type: number) => {
   return kind
 }
 
-export interface Pat {
+interface Pat {
   header: {
     pointer_field: number
     table_id: number

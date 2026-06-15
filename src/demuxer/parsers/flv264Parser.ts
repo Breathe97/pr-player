@@ -24,7 +24,7 @@ const getFlvTimestamp = (timestamp: number, timestampExtended: number) => {
 
 const AAC_SAMPLE_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
 
-export interface On {
+interface On {
   info?: (_info: any) => void
   config?: (_config: AudioConfig | VideoConfig) => void
   chunk?: (_chunk: Chunk) => void
