@@ -155,8 +155,14 @@ export class ParseFMP4 {
 
     const version = view.getUint8(tkhd.contentStart)
     const trackId = view.getUint32(tkhd.contentStart + (version === 1 ? 20 : 12), false)
-    const width = version === 1 ? view.getUint32(tkhd.contentStart + 76, false) >> 16 : view.getUint32(tkhd.contentStart + 52, false) >> 16
-    const height = version === 1 ? view.getUint32(tkhd.contentStart + 80, false) >> 16 : view.getUint32(tkhd.contentStart + 56, false) >> 16
+    const width =
+      version === 1
+        ? view.getUint32(tkhd.contentStart + 76, false) >> 16
+        : view.getUint32(tkhd.contentStart + 64, false) >> 16
+    const height =
+      version === 1
+        ? view.getUint32(tkhd.contentStart + 80, false) >> 16
+        : view.getUint32(tkhd.contentStart + 68, false) >> 16
 
     const hdlr = findBox(view, mdia.contentStart, mdia.offset + mdia.size, 'hdlr')
     const mdhd = findBox(view, mdia.contentStart, mdia.offset + mdia.size, 'mdhd')
@@ -248,6 +254,32 @@ export class ParseFMP4 {
     this.dbg('moof-parsed', { moofOffset: moof.offset, trafCount, ...this.chunkStats })
   }
 
+  private ticksToMs = (ticks: number, timescale: number) => (ticks / timescale) * 1000
+
+  /** ctts：每个 sample 的 composition offset（timescale 单位） */
+  private readCttsOffsets = (view: DataView, ctts: BoxInfo | null, sampleCount: number) => {
+    const offsets = new Int32Array(sampleCount)
+    if (!ctts || sampleCount === 0) return offsets
+
+    const entryCount = view.getUint32(ctts.contentStart + 4, false)
+    let entryIndex = 0
+    let entryLeft = 0
+    let entryOffset = 0
+    let pos = ctts.contentStart + 8
+
+    for (let i = 0; i < sampleCount; i++) {
+      if (entryLeft === 0 && entryIndex < entryCount) {
+        entryLeft = view.getUint32(pos, false)
+        entryOffset = view.getInt32(pos + 4, false)
+        pos += 8
+        entryIndex++
+      }
+      offsets[i] = entryOffset
+      entryLeft -= 1
+    }
+    return offsets
+  }
+
   private parseTraf = (view: DataView, traf: BoxInfo, moofStart: number, mdat: BoxInfo, buffer: Uint8Array) => {
     const tfhd = findBox(view, traf.contentStart, traf.offset + traf.size, 'tfhd')
     const tfdt = findBox(view, traf.contentStart, traf.offset + traf.size, 'tfdt')
@@ -308,13 +340,21 @@ export class ParseFMP4 {
         sampleFlags = view.getUint32(trunOffset, false)
         trunOffset += 4
       }
+      let compositionOffset = 0
+      if (trunFlags & 0x800) {
+        compositionOffset = view.getInt32(trunOffset, false)
+        trunOffset += 4
+      }
 
       if (sampleSize <= 0) continue
 
       const sampleData = buffer.slice(sampleOffset, sampleOffset + sampleSize)
       sampleOffset += sampleSize
 
-      const dtsMs = dts / (track.timescale / 1000)
+      const dtsMs = this.ticksToMs(dts, track.timescale)
+      const ptsMs = this.ticksToMs(dts + compositionOffset, track.timescale)
+      const cts = ptsMs - dtsMs
+
       const isKey =
         track.kind === 'video'
           ? ((sampleFlags >> 16) & 0x1) === 0 || this.isAvccKeyFrame(sampleData)
@@ -325,10 +365,10 @@ export class ParseFMP4 {
         this.chunkStats.video += 1
         if (isKey) this.chunkStats.videoKey += 1
         const nalus = this.splitAvccNalus(sampleData)
-        this.on.chunk?.({ kind: 'video', type, dts: dtsMs, pts: dtsMs, cts: 0, data: sampleData, nalus })
+        this.on.chunk?.({ kind: 'video', type, dts: dtsMs, pts: ptsMs, cts, data: sampleData, nalus })
       } else {
         this.chunkStats.audio += 1
-        this.on.chunk?.({ kind: 'audio', type: 'key', dts: dtsMs, pts: dtsMs, cts: 0, data: sampleData })
+        this.on.chunk?.({ kind: 'audio', type: 'key', dts: dtsMs, pts: ptsMs, cts, data: sampleData })
       }
 
       dts += sampleDuration
@@ -339,139 +379,164 @@ export class ParseFMP4 {
     const moov = findBox(view, 0, buffer.byteLength, 'moov')
     if (!moov) return
 
+    const samples: Chunk[] = []
+
     forEachBox(view, moov.contentStart, moov.offset + moov.size, (box) => {
       if (box.type !== 'trak') return
-      const tkhd = findBox(view, box.contentStart, box.offset + box.size, 'tkhd')
-      const mdia = findBox(view, box.contentStart, box.offset + box.size, 'mdia')
-      if (!tkhd || !mdia) return
-
-      const trackId = view.getUint32(tkhd.contentStart + (view.getUint8(tkhd.contentStart) === 1 ? 20 : 12), false)
-      const track = this.tracks.get(trackId)
-      if (!track) return
-
-      const minf = findBox(view, mdia.contentStart, mdia.offset + mdia.size, 'minf')
-      const stbl = minf && findBox(view, minf.contentStart, minf.offset + minf.size, 'stbl')
-      if (!stbl) return
-
-      const stsz = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stsz')
-      const stco = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stco')
-      const co64 = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'co64')
-      const stsc = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stsc')
-      const stts = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stts')
-      const stss = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stss')
-      if (!stsz || (!stco && !co64) || !stts) {
-        this.dbg('progressive-missing-tables', { trackId, kind: track.kind, hasStsz: !!stsz, hasStco: !!stco, hasCo64: !!co64, hasStts: !!stts })
-        return
-      }
-
-      const sampleCount = view.getUint32(stsz.contentStart + 8, false)
-      const defaultSize = view.getUint32(stsz.contentStart + 4, false)
-      const chunkCount = stco
-        ? view.getUint32(stco.contentStart + 4, false)
-        : view.getUint32(co64!.contentStart + 4, false)
-
-      const readChunkOffset = (chunkIndex: number) =>
-        stco
-          ? view.getUint32(stco.contentStart + 8 + (chunkIndex - 1) * 4, false)
-          : Number(view.getBigUint64(co64!.contentStart + 8 + (chunkIndex - 1) * 8, false))
-
-      const syncSet = new Set<number>()
-      if (stss) {
-        const syncCount = view.getUint32(stss.contentStart + 4, false)
-        for (let i = 0; i < syncCount; i++) {
-          syncSet.add(view.getUint32(stss.contentStart + 8 + i * 4, false))
-        }
-      }
-
-      const stscEntries: { firstChunk: number; samplesPerChunk: number }[] = []
-      if (stsc) {
-        const entryCount = view.getUint32(stsc.contentStart + 4, false)
-        for (let i = 0; i < entryCount; i++) {
-          const base = stsc.contentStart + 8 + i * 12
-          stscEntries.push({
-            firstChunk: view.getUint32(base, false),
-            samplesPerChunk: view.getUint32(base + 4, false)
-          })
-        }
-      }
-
-      const getSamplesPerChunk = (chunkIndex: number) => {
-        if (stscEntries.length === 0) {
-          return sampleCount === chunkCount ? 1 : Math.max(1, Math.ceil(sampleCount / chunkCount))
-        }
-        let samplesPerChunk = stscEntries[0].samplesPerChunk
-        for (const entry of stscEntries) {
-          if (entry.firstChunk <= chunkIndex) samplesPerChunk = entry.samplesPerChunk
-          else break
-        }
-        return samplesPerChunk
-      }
-
-      let dts = 0
-      let sttsOffset = stts.contentStart + 8
-      const sttsCount = view.getUint32(stts.contentStart + 4, false)
-      let sttsIndex = 0
-      let sttsLeft = sttsCount > 0 ? view.getUint32(sttsOffset, false) : 0
-      let sttsDur = sttsCount > 0 ? view.getUint32(sttsOffset + 4, false) : 0
-      sttsOffset += 8
-
-      let emitted = 0
-      let sampleIndex = 1
-      for (let chunkIndex = 1; chunkIndex <= chunkCount && sampleIndex <= sampleCount; chunkIndex++) {
-        const samplesInChunk = getSamplesPerChunk(chunkIndex)
-        let chunkOffset = readChunkOffset(chunkIndex)
-
-        for (let s = 0; s < samplesInChunk && sampleIndex <= sampleCount; s++, sampleIndex++) {
-          const size =
-            defaultSize === 0
-              ? view.getUint32(stsz.contentStart + 16 + (sampleIndex - 1) * 4, false)
-              : defaultSize
-
-          if (chunkOffset + size > buffer.byteLength) {
-            this.dbg('progressive-sample-oob', { trackId, sampleIndex, chunkOffset, size, bufferLength: buffer.byteLength })
-            return
-          }
-
-          const sampleData = buffer.slice(chunkOffset, chunkOffset + size)
-          chunkOffset += size
-
-          const dtsMs = dts / (track.timescale / 1000)
-          const isKey =
-            track.kind === 'video'
-              ? this.isAvccKeyFrame(sampleData) || syncSet.has(sampleIndex) || syncSet.size === 0
-              : true
-
-          if (track.kind === 'video') {
-            this.chunkStats.video += 1
-            if (isKey) this.chunkStats.videoKey += 1
-            this.on.chunk?.({
-              kind: 'video',
-              type: isKey ? 'key' : 'delta',
-              dts: dtsMs,
-              pts: dtsMs,
-              cts: 0,
-              data: sampleData,
-              nalus: this.splitAvccNalus(sampleData)
-            })
-          } else {
-            this.chunkStats.audio += 1
-            this.on.chunk?.({ kind: 'audio', type: 'key', dts: dtsMs, pts: dtsMs, cts: 0, data: sampleData })
-          }
-
-          emitted += 1
-          dts += sttsDur
-          sttsLeft -= 1
-          if (sttsLeft === 0 && sttsIndex + 1 < sttsCount) {
-            sttsIndex += 1
-            sttsOffset = stts.contentStart + 8 + sttsIndex * 8
-            sttsLeft = view.getUint32(sttsOffset, false)
-            sttsDur = view.getUint32(sttsOffset + 4, false)
-          }
-        }
-      }
-
-      this.dbg('progressive-track-done', { trackId, kind: track.kind, sampleCount, chunkCount, emitted })
+      const trackSamples = this.collectProgressiveTrackSamples(view, box, buffer)
+      samples.push(...trackSamples)
     })
+
+    samples.sort((a, b) => a.dts - b.dts || (a.kind === 'video' ? -1 : 1))
+
+    for (const chunk of samples) {
+      if (chunk.kind === 'video') {
+        this.chunkStats.video += 1
+        if (chunk.type === 'key') this.chunkStats.videoKey += 1
+      } else {
+        this.chunkStats.audio += 1
+      }
+      this.on.chunk?.(chunk)
+    }
+
+    this.dbg('progressive-interleaved', { total: samples.length, video: this.chunkStats.video, audio: this.chunkStats.audio })
+  }
+
+  private collectProgressiveTrackSamples = (view: DataView, trak: BoxInfo, buffer: Uint8Array): Chunk[] => {
+    const chunks: Chunk[] = []
+    const tkhd = findBox(view, trak.contentStart, trak.offset + trak.size, 'tkhd')
+    const mdia = findBox(view, trak.contentStart, trak.offset + trak.size, 'mdia')
+    if (!tkhd || !mdia) return chunks
+
+    const trackId = view.getUint32(tkhd.contentStart + (view.getUint8(tkhd.contentStart) === 1 ? 20 : 12), false)
+    const track = this.tracks.get(trackId)
+    if (!track) return chunks
+
+    const minf = findBox(view, mdia.contentStart, mdia.offset + mdia.size, 'minf')
+    const stbl = minf && findBox(view, minf.contentStart, minf.offset + minf.size, 'stbl')
+    if (!stbl) return chunks
+
+    const stsz = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stsz')
+    const stco = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stco')
+    const co64 = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'co64')
+    const stsc = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stsc')
+    const stts = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stts')
+    const stss = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stss')
+    const ctts = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'ctts')
+    if (!stsz || (!stco && !co64) || !stts) {
+      this.dbg('progressive-missing-tables', { trackId, kind: track.kind, hasStsz: !!stsz, hasStco: !!stco, hasCo64: !!co64, hasStts: !!stts })
+      return chunks
+    }
+
+    const defaultSize = view.getUint32(stsz.contentStart + 4, false)
+    const sampleCount = view.getUint32(stsz.contentStart + 8, false)
+    const cttsOffsets = this.readCttsOffsets(view, ctts, sampleCount)
+    const chunkCount = stco
+      ? view.getUint32(stco.contentStart + 4, false)
+      : view.getUint32(co64!.contentStart + 4, false)
+
+    const readChunkOffset = (chunkIndex: number) =>
+      stco
+        ? view.getUint32(stco.contentStart + 8 + (chunkIndex - 1) * 4, false)
+        : Number(view.getBigUint64(co64!.contentStart + 8 + (chunkIndex - 1) * 8, false))
+
+    const syncSet = new Set<number>()
+    if (stss) {
+      const syncCount = view.getUint32(stss.contentStart + 4, false)
+      for (let i = 0; i < syncCount; i++) {
+        syncSet.add(view.getUint32(stss.contentStart + 8 + i * 4, false))
+      }
+    }
+
+    const stscEntries: { firstChunk: number; samplesPerChunk: number }[] = []
+    if (stsc) {
+      const entryCount = view.getUint32(stsc.contentStart + 4, false)
+      for (let i = 0; i < entryCount; i++) {
+        const base = stsc.contentStart + 8 + i * 12
+        stscEntries.push({
+          firstChunk: view.getUint32(base, false),
+          samplesPerChunk: view.getUint32(base + 4, false)
+        })
+      }
+    }
+
+    const getSamplesPerChunk = (chunkIndex: number) => {
+      if (stscEntries.length === 0) {
+        return sampleCount === chunkCount ? 1 : Math.max(1, Math.ceil(sampleCount / chunkCount))
+      }
+      let samplesPerChunk = stscEntries[0].samplesPerChunk
+      for (const entry of stscEntries) {
+        if (entry.firstChunk <= chunkIndex) samplesPerChunk = entry.samplesPerChunk
+        else break
+      }
+      return samplesPerChunk
+    }
+
+    let dts = 0
+    let sttsOffset = stts.contentStart + 8
+    const sttsCount = view.getUint32(stts.contentStart + 4, false)
+    let sttsIndex = 0
+    let sttsLeft = sttsCount > 0 ? view.getUint32(sttsOffset, false) : 0
+    let sttsDur = sttsCount > 0 ? view.getUint32(sttsOffset + 4, false) : 0
+    sttsOffset += 8
+
+    let emitted = 0
+    let sampleIndex = 1
+    for (let chunkIndex = 1; chunkIndex <= chunkCount && sampleIndex <= sampleCount; chunkIndex++) {
+      const samplesInChunk = getSamplesPerChunk(chunkIndex)
+      let chunkOffset = readChunkOffset(chunkIndex)
+
+      for (let s = 0; s < samplesInChunk && sampleIndex <= sampleCount; s++, sampleIndex++) {
+        const size =
+          defaultSize === 0
+            ? view.getUint32(stsz.contentStart + 12 + (sampleIndex - 1) * 4, false)
+            : defaultSize
+
+        if (chunkOffset + size > buffer.byteLength) {
+          this.dbg('progressive-sample-oob', { trackId, sampleIndex, chunkOffset, size, bufferLength: buffer.byteLength })
+          return chunks
+        }
+
+        const sampleData = buffer.slice(chunkOffset, chunkOffset + size)
+        chunkOffset += size
+
+        const dtsMs = this.ticksToMs(dts, track.timescale)
+        const cttsOffset = cttsOffsets[sampleIndex - 1] ?? 0
+        const ptsMs = this.ticksToMs(dts + cttsOffset, track.timescale)
+        const cts = ptsMs - dtsMs
+        const isKey =
+          track.kind === 'video'
+            ? this.isAvccKeyFrame(sampleData) || syncSet.has(sampleIndex) || syncSet.size === 0
+            : true
+
+        if (track.kind === 'video') {
+          chunks.push({
+            kind: 'video',
+            type: isKey ? 'key' : 'delta',
+            dts: dtsMs,
+            pts: ptsMs,
+            cts,
+            data: sampleData,
+            nalus: this.splitAvccNalus(sampleData)
+          })
+        } else {
+          chunks.push({ kind: 'audio', type: 'key', dts: dtsMs, pts: ptsMs, cts, data: sampleData })
+        }
+
+        emitted += 1
+        dts += sttsDur
+        sttsLeft -= 1
+        if (sttsLeft === 0 && sttsIndex + 1 < sttsCount) {
+          sttsIndex += 1
+          sttsOffset = stts.contentStart + 8 + sttsIndex * 8
+          sttsLeft = view.getUint32(sttsOffset, false)
+          sttsDur = view.getUint32(sttsOffset + 4, false)
+        }
+      }
+    }
+
+    this.dbg('progressive-track-done', { trackId, kind: track.kind, sampleCount, chunkCount, emitted })
+    return chunks
   }
 
   private isAvccKeyFrame = (data: Uint8Array) => {
