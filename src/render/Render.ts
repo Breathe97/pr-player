@@ -12,8 +12,7 @@ export class Render {
     try {
       const entries = [...this.renderMap.entries()].filter(([, ins]) => ins && !ins.pause)
       // 仅主路 generator 且无 cut 时零拷贝直写
-      const isSingleDefaultWriter =
-        entries.length === 1 && entries[0][0] === 'default' && !!entries[0][1].writer
+      const isSingleDefaultWriter = entries.length === 1 && entries[0][0] === 'default' && !!entries[0][1].writer
 
       if (isSingleDefaultWriter) {
         entries[0][1].writer!.write(source).catch(() => {})
