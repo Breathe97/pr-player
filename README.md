@@ -1,4 +1,4 @@
-# 对 flv、hls 格式的地址进行解析 并输出 MediaStream，提供 demuxer 层(info、chunk)回调、 decoder 层(audio、video、sei)回调 ，提供 cut 等相关能力，以支持根据业务层 SEI 对视频进行剪切渲染。
+# 对 flv、hls、dash、mp4 格式的地址进行解析 并输出 MediaStream，提供 demuxer 层(info、chunk)回调、 decoder 层(audio、video、sei)回调 ，提供 cut 等相关能力，以支持根据业务层 SEI 对视频进行剪切渲染。
 
 ## 立即开始
 
@@ -193,7 +193,9 @@ player.on.error = (e) => {}
 ## 支持的地址格式
 
 - `flv`：HTTP-FLV 直播/点播
-- `hls`：`.m3u8` 直播/点播
+- `hls`：`.m3u8` 直播/点播（TS 容器 + H.264/AAC）
+- `dash`：`.mpd` DASH 点播/直播（fMP4 分片 + H.264/AAC）
+- `mp4`：渐进式 MP4 点播（H.264/AAC）
 
 ```js
 // flv
@@ -201,10 +203,17 @@ await player.start('https://example.com/live.flv')
 
 // hls
 await player.start('https://example.com/live.m3u8')
+
+// dash
+await player.start('https://example.com/manifest.mpd')
+
+// mp4
+await player.start('https://example.com/video.mp4')
 ```
 
 - 直播场景可配合 `setFrameTrack(true)` 自动追帧
-- hls 点播会自动关闭追帧
+- hls / dash / mp4 点播会自动关闭追帧
+- `rtmp://` 地址浏览器内不支持，请使用 HTTP-FLV 或 HLS 替代
 
 ## 自定义扩展
 

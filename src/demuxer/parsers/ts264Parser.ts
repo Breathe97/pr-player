@@ -1,8 +1,8 @@
 // 参考 https://zhuanlan.zhihu.com/p/496813890
 
-import type { Chunk } from './Cacher'
+import type { Chunk } from '../Cacher'
 import { createAVCC, mergeNalus, naluToAVCC, parseAVCC } from './264Parser'
-import type { AudioConfig, VideoConfig } from './Demuxer'
+import type { AudioConfig, VideoConfig } from './types'
 
 const AAC_SAMPLE_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
 

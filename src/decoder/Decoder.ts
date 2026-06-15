@@ -30,6 +30,7 @@ export class Decoder {
     flv: [30, 50],
     hls: [200, 300],
     dash: [50, 100],
+    mp4: [30, 50],
     rtmp: [50, 100]
   }
 

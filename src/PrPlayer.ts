@@ -5,9 +5,22 @@ import { AudioPlayer } from './audioPlayer/audioPlayer'
 
 import { getFormatFromUrlPattern, stopStream } from './tools'
 import { PrResolves } from './PrResolves'
-import { parseNalu } from './demuxer/264Parser'
+import { parseNalu } from './demuxer/parsers/264Parser'
+import { buildSegmentUrl, parseMpd, resolveUrl, type MpdAdaptation, type MpdInfo } from './demuxer/parsers/mpdParser'
+import { prPlayerDebug } from './debug/PrPlayerDebug'
 import { PrFetch } from 'pr-fetch'
 import type { Pattern } from './type'
+
+interface PrPlayerDash {
+  isLive: boolean
+  segmentNumber: number
+  mpdInfo: MpdInfo | null
+  getSegmentsTimer: number
+  fetchSegment: (url: string) => Promise<boolean>
+  fetchByteRange: (url: string, start: number, end: number) => Promise<boolean>
+  getMpd: () => Promise<void>
+  start: () => Promise<unknown>
+}
 
 interface On {
   demuxer: {
@@ -77,6 +90,8 @@ export class PrPlayer {
 
     const pattern = getFormatFromUrlPattern(url)
     if (pattern === 'unknown') throw new Error('This address cannot be parsed.')
+    prPlayerDebug.setMeta({ url, pattern })
+    prPlayerDebug.log('player', 'start', { url, pattern })
     this.init(pattern)
     switch (pattern) {
       case 'flv':
@@ -89,6 +104,18 @@ export class PrPlayer {
           this.hls.start()
         }
         break
+      case 'dash':
+        {
+          this.dash.start()
+        }
+        break
+      case 'mp4':
+        {
+          this.mp4.start()
+        }
+        break
+      case 'rtmp':
+        throw new Error('RTMP is not supported in browser. Please use HTTP-FLV or HLS.')
     }
   }
 
@@ -99,6 +126,7 @@ export class PrPlayer {
     try {
       this.url = ''
       clearInterval(this.hls.getSegmentsTimer)
+      clearInterval(this.dash.getSegmentsTimer)
       this.prFetch.stop()
       this.getSegmentsFetch.stop()
       this.demuxerWorker?.destroy()
@@ -227,12 +255,16 @@ export class PrPlayer {
     this.demuxerWorker.init(pattern)
 
     this.demuxerWorker.on.debug = (e) => {
+      prPlayerDebug.log('demuxer', 'debug', e)
+      prPlayerDebug.bump('demuxerDebug')
       if (this.option.debug) {
         this.on.debug && this.on.debug(e)
       }
     }
 
     this.demuxerWorker.on.info = (info) => {
+      prPlayerDebug.log('demuxer', 'info', info)
+      prPlayerDebug.bump('demuxerInfo')
       if (this.option.debug) {
         console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: info`, info)
       }
@@ -240,6 +272,8 @@ export class PrPlayer {
     }
 
     this.demuxerWorker.on.config = (config) => {
+      prPlayerDebug.log('demuxer', 'config', config)
+      prPlayerDebug.bump('demuxerConfig')
       if (this.option.debug) {
         console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: config`, config)
       }
@@ -249,8 +283,13 @@ export class PrPlayer {
       switch (kind) {
         case 'audio':
           {
-            const { codec, sampleRate, numberOfChannels } = config
-            this.decoderWorker?.initAudio({ codec, sampleRate, numberOfChannels })
+            const { codec, sampleRate, numberOfChannels, description } = config
+            this.decoderWorker?.initAudio({
+              codec,
+              sampleRate,
+              numberOfChannels,
+              ...(description ? { description } : {})
+            })
           }
           break
         case 'video':
@@ -263,6 +302,17 @@ export class PrPlayer {
     }
 
     this.demuxerWorker.on.chunk = (chunk) => {
+      if (chunk.kind === 'video') {
+        prPlayerDebug.bump('demuxerChunkVideo')
+        if (prPlayerDebug.getCount('demuxerChunkVideo') <= 5) {
+          prPlayerDebug.log('demuxer', 'chunk', { kind: chunk.kind, type: chunk.type, dts: chunk.dts, dataLength: chunk.data?.byteLength })
+        }
+      } else {
+        prPlayerDebug.bump('demuxerChunkAudio')
+        if (prPlayerDebug.getCount('demuxerChunkAudio') <= 5) {
+          prPlayerDebug.log('demuxer', 'chunk', { kind: chunk.kind, type: chunk.type, dts: chunk.dts, dataLength: chunk.data?.byteLength })
+        }
+      }
       this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
@@ -295,18 +345,28 @@ export class PrPlayer {
     const { frameTrack = false } = this.option
     this.decoderWorker.setFrameTrack(frameTrack)
 
-    this.decoderWorker.on.audio.decode = (audio) => {
-      this.audioPlayer?.push(audio)
-      this.on.decoder.audio && this.on.decoder.audio(audio)
-    }
     this.decoderWorker.on.audio.error = (e) => {
+      prPlayerDebug.error('decoder', 'audio.error', e)
       if (this.option.debug) {
         console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: audio.error `, e)
       }
       this.on.error && this.on.error(e)
     }
 
+    this.decoderWorker.on.audio.decode = (audio) => {
+      prPlayerDebug.bump('decoderAudio')
+      if (prPlayerDebug.getCount('decoderAudio') <= 3) {
+        prPlayerDebug.log('decoder', 'audio.decode', { playbackRate: audio.playbackRate })
+      }
+      this.audioPlayer?.push(audio)
+      this.on.decoder.audio && this.on.decoder.audio(audio)
+    }
+
     this.decoderWorker.on.video.decode = (frame) => {
+      prPlayerDebug.bump('decoderVideo')
+      if (prPlayerDebug.getCount('decoderVideo') <= 3) {
+        prPlayerDebug.log('decoder', 'video.decode', { timestamp: frame.timestamp })
+      }
       if (this.start_resolve) {
         this.start_resolve(true)
         this.start_resolve = undefined
@@ -508,6 +568,238 @@ export class PrPlayer {
             } else {
               await new Promise((resolve) => setTimeout(() => resolve(true), 300))
             }
+          }
+        } catch (error: any) {
+          if (error.name !== 'AbortError') {
+            reject(error)
+          }
+        }
+      })
+    }
+  }
+
+  private mp4 = {
+    start: () => {
+      return new Promise(async (resolve, reject) => {
+        try {
+          this.start_resolve = resolve
+          let res
+          let count = 0
+          while (true) {
+            count += 1
+            try {
+              res = await this.prFetch.request(this.url)
+            } catch (error) {
+              console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
+            }
+            if (res?.status === 200 || count === 3) break
+            await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+          }
+
+          if (!res || res.status !== 200) {
+            prPlayerDebug.error('mp4', 'fetch-failed', { status: res?.status, url: this.url })
+            return reject('request is error.')
+          }
+
+          prPlayerDebug.log('mp4', 'fetch-ok', { status: res.status, url: this.url })
+          const reader = res.body?.getReader()
+          if (!reader) return reject('reader is error.')
+
+          this.decoderWorker?.setFrameTrack(false)
+
+          let totalBytes = 0
+          while (true) {
+            const { done, value } = await reader.read()
+            if (value) {
+              totalBytes += value.byteLength
+              prPlayerDebug.bump('pushBytes')
+              this.demuxerWorker?.push(value)
+            }
+            if (done || this.url === '') break
+          }
+          prPlayerDebug.log('mp4', 'fetch-done', { totalBytes })
+        } catch (error: any) {
+          if (error.name !== 'AbortError') {
+            reject(error)
+          }
+        }
+      })
+    }
+  }
+
+  private dash: PrPlayerDash = {
+    isLive: false,
+    segmentNumber: 1,
+    mpdInfo: null,
+    getSegmentsTimer: 0,
+    fetchSegment: async (url: string) => {
+      const res = await this.prFetch.request(url)
+      if (!res || res.status !== 200) return false
+      const reader = res.body?.getReader()
+      if (!reader) return false
+      while (true) {
+        const { done, value } = await reader.read()
+        if (value) this.demuxerWorker?.push(value)
+        if (done || this.url === '') break
+      }
+      return true
+    },
+    fetchByteRange: async (url: string, start: number, end: number) => {
+      let res: Response | undefined
+      let count = 0
+      while (true) {
+        count += 1
+        try {
+          res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` } })
+        } catch (error) {
+          console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
+        }
+        if ((res?.ok && (res.status === 200 || res.status === 206)) || count === 3) break
+        await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+      }
+      if (!res?.ok || (res.status !== 200 && res.status !== 206)) {
+        prPlayerDebug.error('dash', 'range-fetch-failed', { url, start, end, status: res?.status })
+        return false
+      }
+      const data = new Uint8Array(await res.arrayBuffer())
+      prPlayerDebug.log('dash', 'range-fetch', { url, start, end, bytes: data.byteLength, status: res.status })
+      if (data.byteLength > 0) {
+        prPlayerDebug.bump('pushBytes')
+        this.demuxerWorker?.push(data)
+      }
+      return data.byteLength > 0
+    },
+    getMpd: async () => {
+      try {
+        let res
+        let count = 0
+        while (true) {
+          count += 1
+          try {
+            res = await this.getSegmentsFetch.request(this.url)
+          } catch (error) {
+            console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: error`, error)
+          }
+          if (res?.status === 200 || count === 3) break
+          await new Promise((resolve) => setTimeout(() => resolve(true), 500))
+        }
+
+        if (!res || res.status !== 200) throw new Error('request is error.')
+
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('reader is error.')
+        const chunks: Uint8Array[] = []
+        while (true) {
+          const { done, value } = await reader.read()
+          if (value) chunks.push(value)
+          if (done || this.url === '') break
+        }
+        const total = chunks.reduce((n, c) => n + c.byteLength, 0)
+        const merged = new Uint8Array(total)
+        let offset = 0
+        for (const c of chunks) {
+          merged.set(c, offset)
+          offset += c.byteLength
+        }
+        const xml = new TextDecoder('utf-8').decode(merged)
+        const mpdInfo = parseMpd(xml, this.url)
+        this.dash.mpdInfo = mpdInfo
+        this.dash.isLive = mpdInfo.isLive
+        prPlayerDebug.log('dash', 'mpd-parsed', {
+          adaptations: mpdInfo.adaptations.map((a) => ({
+            kind: a.kind,
+            codecs: a.representation.codecs,
+            hasSegmentList: !!a.representation.segmentList,
+            segmentCount: a.representation.segmentList?.segments.length,
+            initRange: a.representation.segmentList?.initRange
+          }))
+        })
+        if (!this.dash.isLive) this.option.frameTrack = false
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          this.on.error && this.on.error(error)
+        }
+      }
+    },
+    start: () => {
+      return new Promise(async (resolve, reject) => {
+        try {
+          this.start_resolve = resolve
+          this.dash.segmentNumber = 1
+          this.dash.mpdInfo = null
+          await this.dash.getMpd()
+
+          const info = this.dash.mpdInfo
+          if (!info) return reject('mpd parse is error.')
+
+          const segmentListAdapt = info.adaptations.find((a) => a.representation.segmentList)
+          if (segmentListAdapt?.representation.segmentList) {
+            const { segmentList, baseUrl: repBaseUrl } = segmentListAdapt.representation
+            const mediaUrl = resolveUrl(info.baseUrl, repBaseUrl || '')
+
+            if (segmentList.initRange) {
+              const { start, end } = segmentList.initRange
+              const ok = await this.dash.fetchByteRange(mediaUrl, start, end)
+              if (!ok) return reject('dash init segment fetch failed.')
+            }
+
+            this.decoderWorker?.setFrameTrack(false)
+
+            for (const range of segmentList.segments) {
+              if (this.url === '') break
+              await this.dash.fetchByteRange(mediaUrl, range.start, range.end)
+            }
+            return
+          }
+
+          const video = info.adaptations.find((a) => a.kind === 'video')
+          const audio = info.adaptations.find((a) => a.kind === 'audio')
+          const mux = info.adaptations.find((a) => a.kind === 'mux')
+          const reps = [video, audio, mux].filter((a): a is MpdAdaptation => !!a)
+          if (reps.length === 0) return reject('no adaptation in mpd.')
+          for (const adapt of reps) {
+            const { id, bandwidth, template } = adapt.representation
+            if (!template?.initialization) continue
+            const initUrl = buildSegmentUrl(info.baseUrl, template.initialization, {
+              RepresentationID: id,
+              Bandwidth: bandwidth,
+              Number: this.dash.segmentNumber
+            })
+            await this.dash.fetchSegment(initUrl)
+          }
+
+          if (this.dash.isLive) {
+            this.dash.getSegmentsTimer = window.setInterval(this.dash.getMpd, 3000)
+          } else {
+            this.decoderWorker?.setFrameTrack(false)
+          }
+
+          while (true) {
+            if (!this.dash.mpdInfo || this.url === '') break
+            const { baseUrl } = this.dash.mpdInfo
+            let hasSegment = false
+
+            for (const adapt of reps) {
+              const { id, bandwidth, template } = adapt.representation
+              if (!template?.media) continue
+              const mediaUrl = buildSegmentUrl(baseUrl, template.media, {
+                RepresentationID: id,
+                Bandwidth: bandwidth,
+                Number: this.dash.segmentNumber
+              })
+              const ok = await this.dash.fetchSegment(mediaUrl)
+              if (ok) hasSegment = true
+            }
+
+            if (!hasSegment) {
+              if (this.dash.isLive) {
+                await new Promise((resolve) => setTimeout(() => resolve(true), 300))
+                continue
+              }
+              break
+            }
+
+            this.dash.segmentNumber += 1
           }
         } catch (error: any) {
           if (error.name !== 'AbortError') {

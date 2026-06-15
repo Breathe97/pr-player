@@ -37,20 +37,13 @@ import { ref } from 'vue'
 import { PrPlayer } from '../../src/index'
 
 const url_options = [
+  { label: 'mp4', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/mp4/xgplayer-demo-360p.mp4' },
   { label: 'flv', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/flv/xgplayer-demo-720p.flv' },
-  { label: 'flv-live', value: 'https://pull.pryun.vip/stream_777/1771984930796.flv?auth_key=1772071330-0-0-2cc37c2df8e703503bbf53d87c063238' },
-  {
-    label: 'flv-dy',
-    value:
-      'https://v23aamqnzch6sm43unthes3exvguvil8v.mobgslb.tbcache.com/pull-f3.douyincdn.com/media/stream-118480348615017132.flv?rsi=1&major_anchor_level=common&abr_pts=-800&unique_id=stream-118480348615017132_684_flv&arch_hrchy=w1&t_id=037-202512231508056044D30C3EB64271698C-EdrmE2&exp_hrchy=w1&auth_key=1767076685-0-0-9240cb267bfeca1faf6189d7a2c6759f&_session_id=037-202512231508056044D30C3EB64271698C-EdrmE2.1766473685643.24745&ali_302c=701&ali_dispatch_cold_stream=on&ali_redirect_ex_hot=66666101&ali_stream_type=01&ali_orig_station=cn8234&ali_st=cn7489&ali_pv=1766473658&ali_ts=1766473686&ali_g=t51'
-  },
-
   { label: 'hls', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/hls/xgplayer-demo.m3u8' },
-  { label: 'hls-live', value: 'https://pull.pryun.vip/stream_1234567890/1764052786653.m3u8?auth_key=1764139186-0-0-315d20cbd0450f662b4c4eabc6cf969d' },
-  { label: 'hls-live-cf', value: 'https://customer-j8s1b2hyoi97nhi8.cloudflarestream.com/1a8f96645a804076b5536f3a22776560/manifest/video.m3u8' }
+  { label: 'dash', value: 'https://sf1-cdn-tos.huoshanstatic.com/obj/media-fe/xgplayer_doc_video/dash/xgplayer-demo-dash.mpd' }
 ]
 
-const url_type = ref<'flv' | 'hls' | 'flv-live' | 'hls-live' | 'hls-live-cf' | 'flv-dy'>('flv')
+const url_type = ref<'mp4' | 'flv' | 'hls' | 'dash'>('flv')
 
 const url = ref('')
 

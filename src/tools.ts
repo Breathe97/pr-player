@@ -11,6 +11,11 @@ export const getFormatFromUrlPattern = (url: string) => {
     return 'dash'
   }
 
+  // 渐进式 MP4 检测
+  if (lowerUrl.includes('.mp4') || lowerUrl.includes('.m4s')) {
+    return 'mp4'
+  }
+
   // RTMP 检测
   if (lowerUrl.startsWith('rtmp://') || lowerUrl.startsWith('rtmps://')) {
     return 'rtmp'

@@ -3,9 +3,9 @@
 // 参考 https://blog.csdn.net/shaosunrise/article/details/121548065
 // 参考 https://www.cnblogs.com/saysmy/p/10716886.html
 
-import type { Chunk } from './Cacher'
+import type { Chunk } from '../Cacher'
 import { parseAVCC } from './264Parser'
-import type { AudioConfig, VideoConfig } from './Demuxer'
+import type { AudioConfig, VideoConfig } from './types'
 
 const getUint24 = (view: DataView, offset: number) => {
   const num = (view.getUint8(offset) << 16) | (view.getUint8(offset + 1) << 8) | view.getUint8(offset + 2)

@@ -1,1 +1,1 @@
-export type Pattern = 'hls' | 'dash' | 'rtmp' | 'flv'
+export type Pattern = 'hls' | 'dash' | 'mp4' | 'rtmp' | 'flv'
