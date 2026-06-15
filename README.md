@@ -21,7 +21,6 @@ import { DemuxerWorker, DecoderWorker, RenderWorker } from 'pr-player'
 
 ```js
 const player = new PrPlayer()
-const player = new PrPlayer({ debug: true })
 
 // 如果你只需要复解器相关的能力 可以拿到复解后的所有回调
 {
@@ -131,10 +130,10 @@ const cutStream = player.cut.getStream('sei-cut')
 ### 构造
 
 ```js
-new PrPlayer({ debug?: boolean })
+new PrPlayer({ frameTrack?: boolean })
 ```
 
-- `debug`：开启后在控制台输出 demuxer、decoder 部分调试信息
+- `frameTrack`：是否默认开启追帧，适用于直播场景
 
 ### 实例方法
 
@@ -186,7 +185,6 @@ player.on.decoder.analysis = ({ fps, cacheLength, decodingSpeed, decodingSpeedRa
 ### 其他
 
 ```js
-player.on.debug = (e) => {}
 player.on.error = (e) => {}
 ```
 

@@ -57,7 +57,7 @@ const init = () => {
 }
 init()
 
-const player = new PrPlayer({ debug: true })
+const player = new PrPlayer()
 
 const videoInfo = ref()
 {

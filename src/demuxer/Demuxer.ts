@@ -18,8 +18,6 @@ export type { AudioConfig, VideoConfig } from './parsers/types'
 
 export interface On {
 
-  debug?: (_debug: unknown) => void
-
   info?: (_info: any) => void
 
   config?: (_config: import('./parsers/types').AudioConfig | import('./parsers/types').VideoConfig) => void
@@ -108,8 +106,6 @@ export class Demuxer {
 
 
 
-    this.parser.on.debug = (e) => this.on.debug && this.on.debug(e)
-
     this.parser.on.info = (info) => this.on.info && this.on.info(info)
 
     this.parser.on.config = (config) => this.on.config && this.on.config(config)
@@ -188,21 +184,19 @@ export class Demuxer {
           } else {
             this.offset = parsed
           }
-        } catch (error) {
+        } catch {
           this.cacher.discardPayload()
-          this.on.debug?.({ demuxer: 'error', message: String(error), stack: error instanceof Error ? error.stack : undefined })
           continue
         }
       }
 
       this.isParseing = false
 
-    } catch (error) {
+    } catch {
 
       this.isParseing = false
 
       this.cacher.discardPayload()
-      this.on.debug?.({ demuxer: 'error', message: String(error), stack: error instanceof Error ? error.stack : undefined })
     }
 
   }

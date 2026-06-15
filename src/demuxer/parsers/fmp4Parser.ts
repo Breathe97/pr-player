@@ -3,12 +3,11 @@
 import type { Chunk } from '../Cacher'
 import { parseAVCC } from './264Parser'
 import type { AudioConfig, VideoConfig } from './types'
-import { collectBoxes, findBox, findSampleEntryChild, forEachBox, listTopLevelBoxes, readBoxAt, readBoxType, type BoxInfo } from './boxParser'
+import { findBox, findSampleEntryChild, forEachBox, readBoxAt, readBoxType, type BoxInfo } from './boxParser'
 
 const AAC_SAMPLE_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
 
 export interface On {
-  debug?: (_debug: any) => void
   info?: (_info: any) => void
   config?: (_config: AudioConfig | VideoConfig) => void
   chunk?: (_chunk: Chunk) => void
@@ -43,8 +42,6 @@ export class ParseFMP4 {
   private tracks = new Map<number, TrackInfo>()
   private mdatBox: BoxInfo | null = null
   private progressiveParsed = false
-  private loggedBoxes = false
-  private chunkStats = { video: 0, audio: 0, videoKey: 0 }
 
   public on: On = {}
 
@@ -59,26 +56,14 @@ export class ParseFMP4 {
 
   constructor() {}
 
-  private dbg = (event: string, data?: unknown) => {
-    this.on.debug?.({ parser: 'fmp4', event, ...((data && typeof data === 'object' ? data : { detail: data }) as object) })
-  }
-
   parse = async (view: DataView) => {
     const buffer = new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
     const end = buffer.byteLength
     let offset = 0
 
-    if (!this.loggedBoxes && end >= 8) {
-      this.loggedBoxes = true
-      this.dbg('top-level-boxes', { bufferLength: end, boxes: listTopLevelBoxes(view, end) })
-    }
-
     while (offset < end) {
       const box = readBoxAt(view, offset, end)
-      if (!box) {
-        this.dbg('incomplete-box', { offset, bufferLength: end })
-        return 0
-      }
+      if (!box) return 0
 
       switch (box.type) {
         case 'moov':
@@ -99,7 +84,6 @@ export class ParseFMP4 {
         case 'ftyp':
           break
         default:
-          this.dbg('skip-box', { type: box.type, offset: box.offset, size: box.size })
           break
       }
 
@@ -118,19 +102,10 @@ export class ParseFMP4 {
     const mdat = this.mdatBox ?? findBox(view, 0, buffer.byteLength, 'mdat')
     const moov = findBox(view, 0, buffer.byteLength, 'moov')
     if (!mdat || !moov) return
-    if (!this.isProgressiveReady(mdat, moov, buffer.byteLength)) {
-      this.dbg('progressive-not-ready', {
-        mdatEnd: mdat.offset + mdat.size,
-        moovEnd: moov.offset + moov.size,
-        bufferLength: buffer.byteLength
-      })
-      return
-    }
+    if (!this.isProgressiveReady(mdat, moov, buffer.byteLength)) return
 
-    this.dbg('progressive-start', { trackCount: this.tracks.size, mdatSize: mdat.size, moovSize: moov.size })
     this.parseProgressive(view, mdat, buffer)
     this.progressiveParsed = true
-    this.dbg('progressive-done', { ...this.chunkStats })
   }
 
   private isProgressiveReady = (mdat: BoxInfo, moov: BoxInfo, bufferLength: number) => {
@@ -153,14 +128,6 @@ export class ParseFMP4 {
         track.defaultSampleDuration = view.getUint32(box.contentStart + 12, false)
         track.defaultSampleSize = view.getUint32(box.contentStart + 16, false)
       })
-      this.dbg('mvex-parsed', {
-        tracks: [...this.tracks.entries()].map(([id, t]) => ({
-          id,
-          kind: t.kind,
-          defaultSampleDuration: t.defaultSampleDuration,
-          defaultSampleSize: t.defaultSampleSize
-        }))
-      })
     }
 
     const mvhd = findBox(view, moov.contentStart, moov.offset + moov.size, 'mvhd')
@@ -173,7 +140,6 @@ export class ParseFMP4 {
         height: [...this.tracks.values()].find((t) => t.kind === 'video')?.height,
         duration: timescale ? duration / timescale : undefined
       })
-      this.dbg('moov-parsed', { trackCount: this.tracks.size, timescale, duration: timescale ? duration / timescale : undefined })
     }
   }
 
@@ -233,16 +199,12 @@ export class ParseFMP4 {
       }
 
       const avcC = findSampleEntryChild(view, entryStart, entryEnd, 'avcC', 86)
-      if (!avcC) {
-        this.dbg('video-config-missing-avcC', { entryFormat, trackId })
-        return
-      }
+      if (!avcC) return
       const avcc = new Uint8Array(view.buffer, avcC.contentStart, avcC.size - avcC.headerSize)
       const config = parseAVCC(avcc)
       const codec = config.codec.replace(/^avc1\./, `${entryFormat}.`)
       this.videoConfig = { kind: 'video', codec, description: avcc, sps: config.sps, pps: config.pps }
       this.on.config?.(this.videoConfig)
-      this.dbg('video-config', { trackId, codec, entryFormat, width, height })
     }
 
     if (kind === 'video') {
@@ -259,9 +221,6 @@ export class ParseFMP4 {
       if (audioConfig) {
         this.audioConfig = audioConfig
         this.on.config?.(audioConfig)
-        this.dbg('audio-config', { trackId, codec: audioConfig.codec, hasDescription: !!audioConfig.description })
-      } else {
-        this.dbg('audio-config-failed', { trackId, hasEsds: !!esds })
       }
     }
   }
@@ -303,18 +262,12 @@ export class ParseFMP4 {
 
   private parseMoof = (view: DataView, moof: BoxInfo, buffer: Uint8Array) => {
     const mdat = this.findMdatForMoof(view, moof, buffer.byteLength)
-    if (!mdat) {
-      this.dbg('moof-no-mdat', { moofOffset: moof.offset })
-      return
-    }
+    if (!mdat) return
 
-    let trafCount = 0
     forEachBox(view, moof.contentStart, moof.offset + moof.size, (box) => {
       if (box.type !== 'traf') return
-      trafCount += 1
       this.parseTraf(view, box, moof.offset, mdat, buffer)
     })
-    this.dbg('moof-parsed', { moofOffset: moof.offset, trafCount, mdatOffset: mdat.offset, ...this.chunkStats })
   }
 
   private ticksToMs = (ticks: number, timescale: number) => (ticks / timescale) * 1000
@@ -347,17 +300,11 @@ export class ParseFMP4 {
     const tfhd = findBox(view, traf.contentStart, traf.offset + traf.size, 'tfhd')
     const tfdt = findBox(view, traf.contentStart, traf.offset + traf.size, 'tfdt')
     const trun = findBox(view, traf.contentStart, traf.offset + traf.size, 'trun')
-    if (!tfhd || !tfdt || !trun) {
-      this.dbg('traf-incomplete', { hasTfhd: !!tfhd, hasTfdt: !!tfdt, hasTrun: !!trun })
-      return
-    }
+    if (!tfhd || !tfdt || !trun) return
 
     const trackId = view.getUint32(tfhd.contentStart + 4, false)
     const track = this.tracks.get(trackId)
-    if (!track) {
-      this.dbg('traf-unknown-track', { trackId, knownTracks: [...this.tracks.keys()] })
-      return
-    }
+    if (!track) return
 
     const tfhdWord = view.getUint32(tfhd.contentStart, false)
     const tfhdFlags = tfhdWord & 0xffffff
@@ -400,10 +347,7 @@ export class ParseFMP4 {
     const sampleCount = view.getUint32(trunOffset, false)
     trunOffset += 4
 
-    if (sampleCount === 0 || sampleCount > 10000) {
-      this.dbg('traf-bad-sample-count', { trackId, sampleCount })
-      return
-    }
+    if (sampleCount === 0 || sampleCount > 10000) return
 
     let dataOffset = 0
     if (trunFlags & 0x1) {
@@ -457,10 +401,7 @@ export class ParseFMP4 {
       }
 
       if (sampleSize <= 0) continue
-      if (sampleOffset + sampleSize > buffer.byteLength) {
-        this.dbg('traf-sample-oob', { trackId, kind: track.kind, i, sampleOffset, sampleSize, bufferLength: buffer.byteLength })
-        break
-      }
+      if (sampleOffset + sampleSize > buffer.byteLength) break
 
       const sampleData = buffer.slice(sampleOffset, sampleOffset + sampleSize)
       sampleOffset += sampleSize
@@ -476,12 +417,9 @@ export class ParseFMP4 {
       const type = isKey ? 'key' : 'delta'
 
       if (track.kind === 'video') {
-        this.chunkStats.video += 1
-        if (isKey) this.chunkStats.videoKey += 1
         const nalus = this.splitAvccNalus(sampleData)
         this.on.chunk?.({ kind: 'video', type, dts: dtsMs, pts: ptsMs, cts, data: sampleData, nalus })
       } else {
-        this.chunkStats.audio += 1
         this.on.chunk?.({ kind: 'audio', type: 'key', dts: dtsMs, pts: ptsMs, cts, data: sampleData })
       }
 
@@ -504,16 +442,8 @@ export class ParseFMP4 {
     samples.sort((a, b) => a.dts - b.dts || (a.kind === 'video' ? -1 : 1))
 
     for (const chunk of samples) {
-      if (chunk.kind === 'video') {
-        this.chunkStats.video += 1
-        if (chunk.type === 'key') this.chunkStats.videoKey += 1
-      } else {
-        this.chunkStats.audio += 1
-      }
       this.on.chunk?.(chunk)
     }
-
-    this.dbg('progressive-interleaved', { total: samples.length, video: this.chunkStats.video, audio: this.chunkStats.audio })
   }
 
   private collectProgressiveTrackSamples = (view: DataView, trak: BoxInfo, buffer: Uint8Array): Chunk[] => {
@@ -537,10 +467,7 @@ export class ParseFMP4 {
     const stts = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stts')
     const stss = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'stss')
     const ctts = findBox(view, stbl.contentStart, stbl.offset + stbl.size, 'ctts')
-    if (!stsz || (!stco && !co64) || !stts) {
-      this.dbg('progressive-missing-tables', { trackId, kind: track.kind, hasStsz: !!stsz, hasStco: !!stco, hasCo64: !!co64, hasStts: !!stts })
-      return chunks
-    }
+    if (!stsz || (!stco && !co64) || !stts) return chunks
 
     const defaultSize = view.getUint32(stsz.contentStart + 4, false)
     const sampleCount = view.getUint32(stsz.contentStart + 8, false)
@@ -594,7 +521,6 @@ export class ParseFMP4 {
     let sttsDur = sttsCount > 0 ? view.getUint32(sttsOffset + 4, false) : 0
     sttsOffset += 8
 
-    let emitted = 0
     let sampleIndex = 1
     for (let chunkIndex = 1; chunkIndex <= chunkCount && sampleIndex <= sampleCount; chunkIndex++) {
       const samplesInChunk = getSamplesPerChunk(chunkIndex)
@@ -606,10 +532,7 @@ export class ParseFMP4 {
             ? view.getUint32(stsz.contentStart + 12 + (sampleIndex - 1) * 4, false)
             : defaultSize
 
-        if (chunkOffset + size > buffer.byteLength) {
-          this.dbg('progressive-sample-oob', { trackId, sampleIndex, chunkOffset, size, bufferLength: buffer.byteLength })
-          return chunks
-        }
+        if (chunkOffset + size > buffer.byteLength) return chunks
 
         const sampleData = buffer.slice(chunkOffset, chunkOffset + size)
         chunkOffset += size
@@ -637,7 +560,6 @@ export class ParseFMP4 {
           chunks.push({ kind: 'audio', type: 'key', dts: dtsMs, pts: ptsMs, cts, data: sampleData })
         }
 
-        emitted += 1
         dts += sttsDur
         sttsLeft -= 1
         if (sttsLeft === 0 && sttsIndex + 1 < sttsCount) {
@@ -649,7 +571,6 @@ export class ParseFMP4 {
       }
     }
 
-    this.dbg('progressive-track-done', { trackId, kind: track.kind, sampleCount, chunkCount, emitted })
     return chunks
   }
 

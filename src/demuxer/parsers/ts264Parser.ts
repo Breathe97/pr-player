@@ -75,7 +75,6 @@ export interface PESPacket {
 }
 
 export interface On {
-  debug?: (_debug: any) => void
   info?: (_info: any) => void
   config?: (_config: AudioConfig | VideoConfig) => void
   chunk?: (_chunk: Chunk) => void
@@ -288,7 +287,6 @@ export class ParseTS {
     // 解析 CRC
     const crc32 = view.getUint32(currentOffset)
     this.pat = { header, programs, crc32 }
-    this.on.debug && this.on.debug({ pat: this.pat })
   }
 
   // PMT表
@@ -362,7 +360,6 @@ export class ParseTS {
     // 解析 CRC
     const crc32 = view.getUint32(currentOffset)
     this.pmt = { header, streams, crc32 }
-    this.on.debug && this.on.debug({ pmt: this.pmt })
   }
 
   // AdaptationField

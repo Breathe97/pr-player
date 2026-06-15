@@ -23,9 +23,6 @@ export class DemuxerWorker {
         case 'on.chunk':
           this.on.chunk && this.on.chunk(data)
           break
-        case 'on.debug':
-          this.on.debug && this.on.debug(data)
-          break
       }
     }
   }

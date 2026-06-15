@@ -7,7 +7,6 @@ import { getFormatFromUrlPattern, stopStream } from './tools'
 import { PrResolves } from './PrResolves'
 import { parseNalu } from './demuxer/parsers/264Parser'
 import { buildSegmentUrl, parseMpd, resolveUrl, type MpdAdaptation, type MpdInfo } from './demuxer/parsers/mpdParser'
-import { prPlayerDebug } from './debug/PrPlayerDebug'
 import { PrFetch } from 'pr-fetch'
 import type { Pattern } from './type'
 
@@ -34,18 +33,15 @@ interface On {
     sei?: (_payload: Uint8Array) => void
     analysis?: (_e: any) => void
   }
-  debug?: (_e: any) => void
   error?: (_e: any) => void
 }
 
 interface PrPlayerOption {
-  debug?: boolean
   frameTrack?: boolean
 }
 
 export class PrPlayer {
   private option: PrPlayerOption = {
-    debug: false,
     frameTrack: false
   }
 
@@ -76,8 +72,7 @@ export class PrPlayer {
   trackGenerator: MediaStreamTrackGenerator
 
   constructor(option: PrPlayerOption = {}) {
-    const { debug = false } = option
-    this.option.debug = debug
+    this.option.frameTrack = option.frameTrack ?? false
   }
 
   /**
@@ -90,8 +85,6 @@ export class PrPlayer {
 
     const pattern = getFormatFromUrlPattern(url)
     if (pattern === 'unknown') throw new Error('This address cannot be parsed.')
-    prPlayerDebug.setMeta({ url, pattern })
-    prPlayerDebug.log('player', 'start', { url, pattern })
     this.init(pattern)
     switch (pattern) {
       case 'flv':
@@ -254,29 +247,11 @@ export class PrPlayer {
     this.demuxerWorker = new DemuxerWorker()
     this.demuxerWorker.init(pattern)
 
-    this.demuxerWorker.on.debug = (e) => {
-      prPlayerDebug.log('demuxer', 'debug', e)
-      prPlayerDebug.bump('demuxerDebug')
-      if (this.option.debug) {
-        this.on.debug && this.on.debug(e)
-      }
-    }
-
     this.demuxerWorker.on.info = (info) => {
-      prPlayerDebug.log('demuxer', 'info', info)
-      prPlayerDebug.bump('demuxerInfo')
-      if (this.option.debug) {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: info`, info)
-      }
       this.on.demuxer.info && this.on.demuxer.info(info)
     }
 
     this.demuxerWorker.on.config = (config) => {
-      prPlayerDebug.log('demuxer', 'config', config)
-      prPlayerDebug.bump('demuxerConfig')
-      if (this.option.debug) {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: config`, config)
-      }
       this.on.demuxer.config && this.on.demuxer.config(config)
       const { kind } = config
 
@@ -302,17 +277,6 @@ export class PrPlayer {
     }
 
     this.demuxerWorker.on.chunk = (chunk) => {
-      if (chunk.kind === 'video') {
-        prPlayerDebug.bump('demuxerChunkVideo')
-        if (prPlayerDebug.getCount('demuxerChunkVideo') <= 5) {
-          prPlayerDebug.log('demuxer', 'chunk', { kind: chunk.kind, type: chunk.type, dts: chunk.dts, dataLength: chunk.data?.byteLength })
-        }
-      } else {
-        prPlayerDebug.bump('demuxerChunkAudio')
-        if (prPlayerDebug.getCount('demuxerChunkAudio') <= 5) {
-          prPlayerDebug.log('demuxer', 'chunk', { kind: chunk.kind, type: chunk.type, dts: chunk.dts, dataLength: chunk.data?.byteLength })
-        }
-      }
       this.on.demuxer.chunk && this.on.demuxer.chunk(chunk)
       if (!this.decoderWorker) return
       const { kind } = chunk
@@ -346,27 +310,15 @@ export class PrPlayer {
     this.decoderWorker.setFrameTrack(frameTrack)
 
     this.decoderWorker.on.audio.error = (e) => {
-      prPlayerDebug.error('decoder', 'audio.error', e)
-      if (this.option.debug) {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: audio.error `, e)
-      }
       this.on.error && this.on.error(e)
     }
 
     this.decoderWorker.on.audio.decode = (audio) => {
-      prPlayerDebug.bump('decoderAudio')
-      if (prPlayerDebug.getCount('decoderAudio') <= 3) {
-        prPlayerDebug.log('decoder', 'audio.decode', { playbackRate: audio.playbackRate })
-      }
       this.audioPlayer?.push(audio)
       this.on.decoder.audio && this.on.decoder.audio(audio)
     }
 
     this.decoderWorker.on.video.decode = (frame) => {
-      prPlayerDebug.bump('decoderVideo')
-      if (prPlayerDebug.getCount('decoderVideo') <= 3) {
-        prPlayerDebug.log('decoder', 'video.decode', { timestamp: frame.timestamp })
-      }
       if (this.start_resolve) {
         this.start_resolve(true)
         this.start_resolve = undefined
@@ -376,10 +328,6 @@ export class PrPlayer {
     }
 
     this.decoderWorker.on.video.error = (e) => {
-      prPlayerDebug.error('decoder', 'video.error', e)
-      if (this.option.debug) {
-        console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->pr-player: video.error `, e)
-      }
       this.on.error && this.on.error(e)
     }
 
@@ -601,27 +549,21 @@ export class PrPlayer {
           }
 
           if (!res || res.status !== 200) {
-            prPlayerDebug.error('mp4', 'fetch-failed', { status: res?.status, url: this.url })
             return reject('request is error.')
           }
 
-          prPlayerDebug.log('mp4', 'fetch-ok', { status: res.status, url: this.url })
           const reader = res.body?.getReader()
           if (!reader) return reject('reader is error.')
 
           this.decoderWorker?.setFrameTrack(false)
 
-          let totalBytes = 0
           while (true) {
             const { done, value } = await reader.read()
             if (value) {
-              totalBytes += value.byteLength
-              prPlayerDebug.bump('pushBytes')
               this.demuxerWorker?.push(value)
             }
             if (done || this.url === '') break
           }
-          prPlayerDebug.log('mp4', 'fetch-done', { totalBytes })
         } catch (error: any) {
           if (error.name !== 'AbortError') {
             reject(error)
@@ -662,13 +604,10 @@ export class PrPlayer {
         await new Promise((resolve) => setTimeout(() => resolve(true), 500))
       }
       if (!res?.ok || (res.status !== 200 && res.status !== 206)) {
-        prPlayerDebug.error('dash', 'range-fetch-failed', { url, start, end, status: res?.status })
         return false
       }
       const data = new Uint8Array(await res.arrayBuffer())
-      prPlayerDebug.log('dash', 'range-fetch', { url, start, end, bytes: data.byteLength, status: res.status })
       if (data.byteLength > 0) {
-        prPlayerDebug.bump('pushBytes')
         this.demuxerWorker?.push(data)
       }
       return data.byteLength > 0
@@ -709,15 +648,6 @@ export class PrPlayer {
         const mpdInfo = parseMpd(xml, this.url)
         this.dash.mpdInfo = mpdInfo
         this.dash.isLive = mpdInfo.isLive
-        prPlayerDebug.log('dash', 'mpd-parsed', {
-          adaptations: mpdInfo.adaptations.map((a) => ({
-            kind: a.kind,
-            codecs: a.representation.codecs,
-            hasSegmentList: !!a.representation.segmentList,
-            segmentCount: a.representation.segmentList?.segments.length,
-            initRange: a.representation.segmentList?.initRange
-          }))
-        })
         if (!this.dash.isLive) this.option.frameTrack = false
         return mpdInfo
       } catch (error: any) {
@@ -739,7 +669,6 @@ export class PrPlayer {
           const dashRep = info.adaptations.find((a) => a.kind === 'video' || a.kind === 'mux')?.representation
           if (dashRep?.width && dashRep?.height) {
             const dashInfo = { width: dashRep.width, height: dashRep.height, duration: info.duration }
-            prPlayerDebug.log('dash', 'info', dashInfo)
             this.on.demuxer.info && this.on.demuxer.info(dashInfo)
           }
 
