@@ -59,8 +59,16 @@ export class Decoder {
     this.initDecodeInterval()
   }
 
-  initAudio = (config: AudioDecoderConfig) => {
+  initAudio = async (config: AudioDecoderConfig) => {
     this.audio.destroy()
+    // 检查音频配置是否被支持
+    const support = await AudioDecoder.isConfigSupported(config).catch(() => ({ supported: false }))
+    if (!support.supported) {
+      console.warn('[Decoder] audio config not supported:', config.codec, 'audio will be skipped')
+      this.audioDecoderConfig = undefined
+      this.audioDecoder = undefined
+      return
+    }
     this.audioDecoderConfig = { ...config }
     this.audioDecoder = new AudioDecoder({
       output: (audioData: AudioData) => {
@@ -154,7 +162,11 @@ export class Decoder {
     this.nextRenderTime = this.lastRenderTime + timeout // 下一帧渲染时间
 
     this.decodeTimer = setTimeout(() => {
-      this.decode()
+      try {
+        this.decode()
+      } catch (e) {
+        console.error('[Decoder] decode error:', e)
+      }
       this.initDecodeInterval() // 进行下一次解码
     }, timeout)
   }
@@ -217,8 +229,12 @@ export class Decoder {
 
   private decodeAudio = (init: EncodedAudioChunkInit) => {
     if (!this.audioDecoder) return
-    const chunk = new EncodedAudioChunk(init)
-    this.audioDecoder.decode(chunk)
+    try {
+      const chunk = new EncodedAudioChunk(init)
+      this.audioDecoder.decode(chunk)
+    } catch (e) {
+      console.warn('[Decoder] audio decode error (AudioDecoder may be unusable):', e)
+    }
   }
 
   private decodeVideo = (init: EncodedAudioChunkInit) => {

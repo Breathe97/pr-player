@@ -77,8 +77,8 @@ export class ParseFLV {
 
               // 音频配置
               if (accPacketType === 0) {
-                const { codec, sampleRate, channelConfiguration } = tagBody
-                this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels: channelConfiguration }
+                const { codec, sampleRate, channelConfiguration, data: asc } = tagBody
+                this.audioConfig = { kind: 'audio', codec, sampleRate, numberOfChannels: channelConfiguration, ...(asc ? { description: asc } : {}) }
                 this.on.config && this.on.config(this.audioConfig)
               }
               // 音频帧数据

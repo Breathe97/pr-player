@@ -61,9 +61,16 @@ const player = new PrPlayer()
 
 const videoInfo = ref()
 {
+  player.on.error = (e) => {
+    console.log('------->Breathe: error', e)
+  }
+
   player.on.demuxer.info = (info) => {
     videoInfo.value = info
     console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: info`, info)
+  }
+  player.on.demuxer.config = (config) => {
+    console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: config`, config)
   }
   // player.on.demuxer.chunk = (chunk) => {
   //   console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: chunk`, chunk)
@@ -116,9 +123,10 @@ const play = async () => {
     if (stream) {
       const dom = document.querySelector('#canvas-video-stream-view')
       const view = document.createElement('video')
-      view.style.objectFit = 'cover'
+      // view.style.objectFit = 'cover'
       view.style.width = '100%'
       view.style.height = '100%'
+      console.log('\x1b[38;2;0;151;255m%c%s\x1b[0m', 'color:#0097ff;', `------->Breathe: stream`, stream);
       view.srcObject = stream
       view.play()
       dom?.replaceChildren(view)
